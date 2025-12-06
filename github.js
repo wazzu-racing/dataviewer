@@ -40,4 +40,4 @@ async function gh_get_files() {
 	let node = await gh_get_subfolder("Hosted Files (GitHub)", "https://api.github.com/repos/wazzu-racing/log_files/git/trees/main", "");
 	document.getElementById("github_files").appendChild(node);
 }
-gh_get_files()
+// gh_get_files()

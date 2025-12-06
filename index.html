@@ -32,12 +32,13 @@
 						<input type="file" accept=".bin,.dat,.txt" id="fileupload">
 					</div>
 					<br><br>
-					<div id="github_files">
-
-					</div>
-					<br><br>
 					<div class="whitebox">
 						<button onclick="startwebserial()">Connect to Car</button>
+					</div>
+					<br><br>
+					<button onclick="gh_get_files();this.remove()">Fetch from GitHub</button>
+					<br><br>
+					<div id="github_files">
 					</div>
 					<br><br>
 					<p>&copy; Wazzu Racing 2025</p>

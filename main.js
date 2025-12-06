@@ -342,7 +342,6 @@ function fromfile(databytes) {
 
 	window.objects = objects;
 
-		alert()
 
 	document.getElementById("gotolive").remove();
 
@@ -359,7 +358,7 @@ function gofileupload() {
 	var reader = new FileReader();
 	reader.onload = function() {
 		fname = document.getElementById("fileupload").files[0].name;
-		fromfile(this.results);
+		fromfile(this.result);
 	}
 	reader.readAsArrayBuffer(document.getElementById("fileupload").files[0]);
 }
