@@ -2,7 +2,12 @@ async function gh_get_subfolder(name, url, path) {
 	let response = await fetch(url);
 	let data = (await response.json())["tree"];
 
-	let folders = data.filter(i=>i.type=='tree');
+	let folders = []
+	try {
+		folders = data.filter(i=>i.type=='tree');
+	} catch (e) {
+		alert("Cannot connect to GitHub API... rate limit exceeded?")
+	}
 	let files = data.filter(i=>i.type=='blob');
 
 
