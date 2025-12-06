@@ -15,6 +15,7 @@
 		<script src='./plotly.js'></script>
 		<script src="./turf.js"></script>
 		<script src="./gauge.js"></script>
+		<script src="./github.js"></script>
 		<script src="leaflet.hotline.min.js"></script>
 		<script src="booklet.js"></script>
 
@@ -27,9 +28,17 @@
 					<h1>Wazzu Racing Datalog Viewer</h1>
 					<p>Import *.bin log files from the Wazzu Racing car to view the log data in an interactive display!</p>
 					<br><br>
-					<input type="file" accept=".bin,.dat,.txt" id="fileupload">
+					<div class="whitebox">
+						<input type="file" accept=".bin,.dat,.txt" id="fileupload">
+					</div>
 					<br><br>
-					<button onclick="startwebserial()">Connect to Car</button>
+					<div id="github_files">
+
+					</div>
+					<br><br>
+					<div class="whitebox">
+						<button onclick="startwebserial()">Connect to Car</button>
+					</div>
 					<br><br>
 					<p>&copy; Wazzu Racing 2025</p>
 				</div>

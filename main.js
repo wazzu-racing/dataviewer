@@ -3,6 +3,8 @@ window.objects = [];
 let live = false;
 let last_wm_parse = -1;
 
+var fname = "Untitled";
+
 var gauge = new Gauge(document.getElementById('gg_c')).setOptions({
   angle: 0.15, // The span of the gauge arc
   lineWidth: 0.44, // The line thickness
@@ -161,6 +163,7 @@ async function read_data_from_serial(port) {
 		const reader = port.readable.getReader();
 		try {
 			while (true) {
+				fname = "LIVE";
 				const { value, done } = await reader.read();
 				if (done) break;
 
@@ -332,26 +335,29 @@ let hotline_opts = {
 			outlineColor: '#000000',
 			outlineWidth: 1
 		};
+function fromfile(databytes) {
+	let data = toData(databytes, 48, 0);
+	let objects = toObjects(data);
+	console.log(objects)
+
+	window.objects = objects;
+
+	document.getElementById("gotolive").remove();
+
+	table.setData(objects);
+
+	start();
+
+	updateall();
+}
 // TO GET THE DATA FROM UPLOAD #################################################################
 // https://stackoverflow.com/questions/32556664/getting-byte-array-through-input-type-file
 document.querySelector('#fileupload').onchange = gofileupload;
 function gofileupload() {
 	var reader = new FileReader();
 	reader.onload = function() {
-		let data = toData(this.result, 48, 0);
-		let objects = toObjects(data);
-		console.log(objects)
-
-		window.objects = objects;
-
-		document.getElementById("gotolive").remove();
-
-		table.setData(objects);
-
-		start();
-
-		updateall();
-
+		fname = reader.target.fileName;
+		fromfile(this.results);
 	}
 	reader.readAsArrayBuffer(document.getElementById("fileupload").files[0]);
 }
@@ -377,9 +383,12 @@ function start() {
 
 		document.getElementById("welcome_container").remove();
 
-		// let d = get_series("unixtime").filter(i=>i>100)[0].toLocaleDateString();
-		// document.getElementById("logtitle").innerText = `${d} (${f})`;
-		// document.title = `${d} (${fname}) - Wazzu Racing Datalog Viewer`
+		var d = "";
+		try {
+			d = get_series("unixtime").filter(i=>i>100)[0].toLocaleDateString();
+		} catch (e) {}
+		document.getElementById("logtitle").innerText = `${d} (${fname})`;
+		document.title = `${d} (${fname}) - Wazzu Racing Datalog Viewer`
 		// let wm = get_series("write_millis")
 		// TIME_BOUNDS = [0, wm[wm.length-1]]
 
@@ -436,12 +445,13 @@ function plot() {
 				name: field2
 			},
 			// {
-			// 	x: [CURRENT_TIME, CURRENT_TIME],
-			// 	y: [0, cursor_top],
+			// 	x: [CURRENT_TIME, CURRENT_TIME+0.001],
+			// 	y: [0, 1],
 			// 	mode: 'lines',
+			// 	xaxis: 'x',
 			// 	type: 'scatter',
-			// 	// yaxis: 'y3',
-			// 	// name: field2
+			// 	yaxis: 'y2',
+			// 	name: "current time"
 			// },
 			// {
 				// x: get_series("write_millis"),
@@ -457,6 +467,7 @@ function plot() {
 	   },
 	yaxis: {title: {text: field1}},
   yaxis2: {title: {text: field2},overlaying: 'y',side: 'right'},
+  yaxis3: {title: {text: field2},overlaying: 'y',side: 'right'},
 		autosize:true,
 		margin: {
 			l:40,r:10,t:10,b:20
@@ -465,13 +476,9 @@ function plot() {
 	document.getElementById("plot").on('plotly_relayout', updateall);
 	document.getElementById("plot").on('plotly_afterplot', updateall);
 	document.getElementById("plot").on('plotly_click', function(data){
-		var x = CURRENT_TIME;
-		for(var i=0; i < data.points.length; i++){
-			x = data.points[i].x;
-		}
-		CURRENT_TIME = x
-			// updateall()
-
+		CURRENT_TIME = data.points[0].x
+		live = false;
+		updateall();
 	});
 	if (live) setTimeout(plot, 200)
 }
@@ -480,6 +487,12 @@ function plot() {
 
 function updateall(fromprog = false) {
 		let wm = get_series("write_millis");
+
+		let point_num = wm.indexOf(CURRENT_TIME);
+		Plotly.Fx.hover("plot",[{curveNumber: 0, pointNumber: point_num}])
+		// Plotly.Fx.hover("plot",[{curveNumber: 1, pointNumber: point_num}])
+
+
 		let min = 0;
 		let max = 0;
 		if (document.getElementById("plot").layout && !live) {
@@ -570,6 +583,19 @@ function updatemap() {
 	hotline_opts.max = minmax[1]
 	// console.log(hotline_opts)
 	MAP_HOTLINE = L.hotline(points, hotline_opts);
+	MAP_HOTLINE.on("click", function(e) {
+		console.log(e)
+		let line = MAP_HOTLINE._latlngs;
+		var min_dist = Infinity;
+		var min_index = -1;
+		for (var i = 0;i<line.length;i++) {
+			d = turf.distance(turf.point([line[i].lng, line[i].lat]), turf.point([e.latlng.lng, e.latlng.lat]));
+			if (d < min_dist) {min_dist = d;min_index = i};
+		}
+		CURRENT_TIME = get_points("write_millis", TIME_BOUNDS[0], TIME_BOUNDS[1])[min_index][2];
+		updateall()
+		// alert(CURRENT_TIME)
+	})
 	MAP_HOTLINE.addTo(map)
 
 	let current = get_points("write_millis", CURRENT_TIME-1, CURRENT_TIME+1)[0]

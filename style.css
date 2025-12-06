@@ -19,6 +19,29 @@ input {font-family: monospace}
 #welcome h1 {
 	font-size: 2em;
 }
+#github_files {
+	text-align: left;
+	max-height: 200px;
+	overflow-y: auto;
+	border: 1px solid white;
+	scrollbar-gutter: 10px;
+}
+::-webkit-scrollbar {width: 7px;}
+::-webkit-scrollbar-track {background: transparent;}
+::-webkit-scrollbar-thumb {background: white;border-radius:0px;}
+#github_files details {
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 30px;
+}
+#github_files summary {
+	cursor: pointer;
+}
+#github_files a {
+	display: inline-block;
+	margin-left: 30px;
+	color: white;
+}
 #welcome {
 	position: fixed;
 	top: 35vh;
