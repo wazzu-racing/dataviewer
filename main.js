@@ -3,6 +3,29 @@ window.objects = [];
 let live = false;
 let last_wm_parse = -1;
 
+var gauge = new Gauge(document.getElementById('gg_c')).setOptions({
+  angle: 0.15, // The span of the gauge arc
+  lineWidth: 0.44, // The line thickness
+  radiusScale: 1, // Relative radius
+  // pointer: {
+    // length: 0.6, // // Relative to gauge radius
+    // strokeWidth: 0.035, // The thickness
+    // color: '#000000' // Fill color
+  // },
+  limitMax: false,     // If false, max value increases automatically if value > maxValue
+  limitMin: false,     // If true, the min value of the gauge will be fixed
+  // colorStart: '#6FADCF',   // Colors
+  // colorStop: '#8FC0DA',    // just experiment with them
+  // strokeColor: '#E0E0E0',  // to see which ones work best for you
+  // generateGradient: true,
+  highDpiSupport: true,     // High resolution support
+
+});
+// gauge.maxValue = 0.5;
+// gauge.setMinValue(-0.5);  // Prefer setter over gauge.minValue = 0
+gauge.animationSpeed = 32; // set animation speed (32 is default value)
+// gauge.set(1244); // set actual value
+
 var table = new Tabulator("#table", {
     layout:"fitColumns",
     placeholder:"No Data Yet",
@@ -65,6 +88,7 @@ var table = new Tabulator("#table", {
 });
 
 function updateInfo() {
+	try {
 	let times = get_series("unixtime", TIME_BOUNDS[0], TIME_BOUNDS[1]);
 	let tmin = times[0].toLocaleTimeString();
 	let tmax = times[times.length-1].toLocaleTimeString();
@@ -73,12 +97,15 @@ function updateInfo() {
 	seconds = Math.round(seconds*1000)/1000;
 	// console.warn(seconds)
 
-	var dist = NaN//turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "miles" });
-	var units = "miles";
-	// if (dist < 1) {
-	// 	units = "feet";
-	// 	dist = turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "feet" });
-	// }
+	var dist = "no GPS data";
+	var units = "";
+	try {dist = turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "miles" });
+		units = "miles";
+		if (dist < 1) {
+			units = "feet";
+			dist = turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "feet" });
+		}
+	} catch (e) {}
 
 
 	document.getElementById("info").innerHTML = `
@@ -86,6 +113,10 @@ function updateInfo() {
 	<b>Time:</b> ${seconds} s<br>
 	<b>Distance Traveled: </b> ${dist} ${units}<br>
 	`
+	}
+	catch (e) {
+
+	}
 }
 
 navigator.serial.addEventListener("connect", (e) => {
@@ -146,18 +177,31 @@ async function read_data_from_serial(port) {
 
 					// console.log(objects[0]).write_millis;
 
-					window.objects.push(...objects);
-
-					if (!has_started) {
-						start();
-						has_started = true;
-						live = true;
+					if (last_wm_parse > 0 && Math.abs(last_wm_parse - objects[0].write_millis) > 1000) {
+						console.error(ab);
+						console.error(objects[0]);
+						// ...
+						// alert()
 					}
+					else {
+						window.objects.push(...objects);
+						for (var i=0;i<objects.length;i++)
+							table.addRow(objects[i])
+						console.log("push");
+						last_wm_parse = objects[0].write_millis;
 
-					updateall()
-					if (live) {
-						TIME_BOUNDS[0] = Math.max(CURRENT_TIME - (30 * 1000), TIME_BOUNDS[0]);
-						CURRENT_TIME = objects.slice(-1)[0].write_millis;
+						if (!has_started) {
+							start();
+							has_started = true;
+							live = true;
+						}
+
+						updateall()
+						if (live) {
+							TIME_BOUNDS[0] = Math.max(CURRENT_TIME - (30 * 1000), TIME_BOUNDS[0]);
+							CURRENT_TIME = objects.slice(-1)[0].write_millis;
+							TIME_BOUNDS[1] = CURRENT_TIME;
+						}
 					}
 				}
 
@@ -178,6 +222,7 @@ map = L.map('map_el').setView([34, -110], 3);
 
 
 new BookletWindow("#plot_c", {title:"Main Plot", x:300, y:150, w:800, h:500, closable:false})
+new BookletWindow("#gg", {title:"Gauge", x:700, y:300, w:400, h:400, closable:false})
 new BookletWindow("#map", {title:"GPS Data Map", x:0, y:0, w:600, h:600, closable:false})
 new BookletWindow("#table", {title:"Data Table", x:700, y:30, w:600, h:200, closable:false})
 new BookletWindow("#info", {title:"Details", x:900, y:500, w:250, h:100, closable:false})
@@ -202,13 +247,13 @@ function toData(buffer, n_ints, n_floats) {
 			// length mismatch
 			// alert("Error: invalid # of timestamps/values or corrupted data...");
 		}
-		// add row to all rows
-		if (row[0] >= 0) {
-			if (last_wm_parse < 0 || (row[0] > (last_wm_parse - 1000) && row[0] < (last_wm_parse + 1000) )) {
+		// // add row to all rows
+		// if (row[0] >= 0) {
+		// 	if (last_wm_parse < 0 || (row[0] > (last_wm_parse - 1000) && row[0] < (last_wm_parse + 1000) )) {
 				data.push(row);
-				last_wm_parse = row[0];
-			}
-		}
+		// 		last_wm_parse = row[0];
+		// 	}
+		// }
 	}
 	return data;
 }
@@ -295,12 +340,18 @@ function gofileupload() {
 	reader.onload = function() {
 		let data = toData(this.result, 48, 0);
 		let objects = toObjects(data);
+		console.log(objects)
 
 		window.objects = objects;
+
+		document.getElementById("gotolive").remove();
+
+		table.setData(objects);
 
 		start();
 
 		updateall();
+
 	}
 	reader.readAsArrayBuffer(document.getElementById("fileupload").files[0]);
 }
@@ -314,7 +365,7 @@ function start() {
 		// TIME_BOUNDS[1] = arrayMinMax(get_series("write_millis"))[1];
 		// console.log(get_series("write_millis"))
 
-		setInterval(plot, 200);
+		setTimeout(plot, 200);
 
 		var bounds = MAP_HOTLINE.getBounds();
 		try {
@@ -339,6 +390,7 @@ function start() {
 		table.setFilter(customFilter, {});
 		table.on("rowClick", function(e, row){
 			CURRENT_TIME = row.getData().write_millis;
+			live = false;
 			updateall()
 		})
 		updateInfo()
@@ -362,9 +414,6 @@ function updatesave() {
 }
 
 function plot() {
-
-	let minval = TIME_BOUNDS[0];
-
 	let field1 = document.getElementById("field1").value;
 	let field2 = document.getElementById("field2").value;
 	// let field3 = document.getElementById("field3").value;
@@ -372,15 +421,15 @@ function plot() {
 
 	a = Plotly.newPlot('plot', [
 			{
-				x: get_series("write_millis", minval, TIME_BOUNDS[1]),
-				y: get_series(field1, minval, TIME_BOUNDS[1]),
+				x: get_series("write_millis"),
+				y: get_series(field1),
 				mode: 'lines',
 				type: 'scatter',
 				name: field1
 			},
 			{
-				x: get_series("write_millis", minval, TIME_BOUNDS[1]),
-				y: get_series(field2, minval, TIME_BOUNDS[1]),
+				x: get_series("write_millis"),
+				y: get_series(field2),
 				mode: 'lines',
 				type: 'scatter',
 				yaxis: 'y2',
@@ -403,6 +452,9 @@ function plot() {
 				// name: field2
 			// },
 	], {
+		xaxis: {
+		  range: TIME_BOUNDS,
+	   },
 	yaxis: {title: {text: field1}},
   yaxis2: {title: {text: field2},overlaying: 'y',side: 'right'},
 		autosize:true,
@@ -413,40 +465,46 @@ function plot() {
 	document.getElementById("plot").on('plotly_relayout', updateall);
 	document.getElementById("plot").on('plotly_afterplot', updateall);
 	document.getElementById("plot").on('plotly_click', function(data){
-    var x = CURRENT_TIME;
-    for(var i=0; i < data.points.length; i++){
-        x = data.points[i].x;
-    }
-	CURRENT_TIME = x
-		// updateall()
+		var x = CURRENT_TIME;
+		for(var i=0; i < data.points.length; i++){
+			x = data.points[i].x;
+		}
+		CURRENT_TIME = x
+			// updateall()
 
-});
-
+	});
+	if (live) setTimeout(plot, 200)
 }
 
 
 
 function updateall(fromprog = false) {
 		let wm = get_series("write_millis");
-		// let min = 111;
-		// let max = 122;
-		// if (document.getElementById("plot").layout) {
-		// 	min = document.getElementById("plot").layout.xaxis.range[0];
-		// 	max = document.getElementById("plot").layout.xaxis.range[1];
-		// 	// if (min != TIME_BOUNDS[0]) live = false;
-		// }
-		// if (min && max) {
-		// 	TIME_BOUNDS = [min, max];
-		// 	if (live) {
-		// 		TIME_BOUNDS = [0, wm[wm.length-1]];
-		// 	}
+		let min = 0;
+		let max = 0;
+		if (document.getElementById("plot").layout && !live) {
+			min = document.getElementById("plot").layout.xaxis.range[0];
+			max = document.getElementById("plot").layout.xaxis.range[1];
+			// if (min != TIME_BOUNDS[0]) live = false;
+		}
+		if (min && max) {
+			TIME_BOUNDS = [min, max];
+			if (live) {
+				TIME_BOUNDS[1] = wm[wm.length-1];
+			}
 			if (CURRENT_TIME < TIME_BOUNDS[0]) CURRENT_TIME = cclosest(TIME_BOUNDS[0])
 			updatemap();
 			table.refreshFilter();
 			// table.selectRow(CURRENT_TIME)
+		}
+
+			let ggval = document.getElementById("field_g").value;
+			gauge.set(get_series(ggval, CURRENT_TIME-1, CURRENT_TIME+1)[0]);
+
 
 			let watchval = document.getElementById("watch").value;
 			document.getElementById("watchval").innerHTML = get_series(watchval, CURRENT_TIME-1, CURRENT_TIME+1)[0];
+
 			let arr = get_series(watchval, TIME_BOUNDS[0], TIME_BOUNDS[1]);
 			const average = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
 			const minmax = arrayMinMax(arr);
@@ -457,13 +515,11 @@ function updateall(fromprog = false) {
 				`
 
 
-			table.setData(window.objects);
 // 			// from chatgpt:
-			// let horizontal = table.scrollLeft;
-			// table.scrollToRow(CURRENT_TIME).then(()=>{table.scrollLeft = horizontal;})
+			let horizontal = table.scrollLeft;
+			table.scrollToRow(CURRENT_TIME).then(()=>{table.scrollLeft = horizontal;})
 // 			// end
 			updateInfo()
-		// }
 		if (!fromprog) {
 			let prog = 10000 * ((CURRENT_TIME - TIME_BOUNDS[0]) / (TIME_BOUNDS[1] - TIME_BOUNDS[0]))
 			document.getElementById("prog").value = prog
@@ -477,13 +533,23 @@ document.getElementById("prog").oninput = () => {
 	let c = (p * (TIME_BOUNDS[1] - TIME_BOUNDS[0])) + TIME_BOUNDS[0]
 	// c2 = cclosest(c)
 	// console.log(c2)
+	live = false;
 	CURRENT_TIME = cclosest(c);
 	updateall()
 }
+// function cclosest(c) {
+// 	return get_series("write_millis").reduce(function(prev, curr) {
+// 	  return (Math.abs(curr - c) < Math.abs(prev - c) ? curr : prev);
+// 	});
+// }
 function cclosest(c) {
-	return get_series("write_millis").reduce(function(prev, curr) {
-	  return (Math.abs(curr - c) < Math.abs(prev - c) ? curr : prev);
-	});
+	var series = get_series("write_millis");
+	for (var i=0;i<series.length-1;i++) {
+		if (series[i] <= c && series[i+1] >= c) {
+			return series[i];
+		}
+	}
+	return c;
 }
 function changetime(a) {
 	// alert()
