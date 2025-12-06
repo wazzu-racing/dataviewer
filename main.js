@@ -1,11 +1,7 @@
-// Vue.component('map', {
-//   data: function () {
-//     return {
-//       count: 0
-//     }
-//   },
-//   template: '<button v-on:click="count++">You clicked me {{ count }} times.</button>'
-// })
+window.objects = [];
+
+let live = false;
+let last_wm_parse = -1;
 
 var table = new Tabulator("#table", {
     layout:"fitColumns",
@@ -75,13 +71,14 @@ function updateInfo() {
 
 	var seconds = (TIME_BOUNDS[1]-TIME_BOUNDS[0])/1000;
 	seconds = Math.round(seconds*1000)/1000;
+	// console.warn(seconds)
 
-	var dist = turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "miles" });
+	var dist = NaN//turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "miles" });
 	var units = "miles";
-	if (dist < 1) {
-		units = "feet";
-		dist = turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "feet" });
-	}
+	// if (dist < 1) {
+	// 	units = "feet";
+	// 	dist = turf.length(turf.lineString(get_points(null, TIME_BOUNDS[0], TIME_BOUNDS[1])), { units: "feet" });
+	// }
 
 
 	document.getElementById("info").innerHTML = `
@@ -89,6 +86,88 @@ function updateInfo() {
 	<b>Time:</b> ${seconds} s<br>
 	<b>Distance Traveled: </b> ${dist} ${units}<br>
 	`
+}
+
+navigator.serial.addEventListener("connect", (e) => {
+  // Connect to `e.target` or add it to a list of available ports.
+	console.log(e);
+});
+
+navigator.serial.addEventListener("disconnect", (e) => {
+  // Remove `e.target` from the list of available ports.
+	console.log(e);
+});
+
+navigator.serial.getPorts().then((ports) => {
+  // Initialize the list of available ports with `ports` on page load.
+	console.log(ports)
+});
+
+function startwebserial() {
+	const usbVendorId = 0x239a;
+	navigator.serial
+		.requestPort({ filters: [{ usbVendorId}] })
+		.then((port) => {
+			console.log(port)
+			read_data_from_serial(port);
+		})
+		.catch((_) => {
+		  alert("Please select the reciever from the list of devices!");
+		});
+}
+
+serial_buffer = [];
+has_started = false;
+
+async function read_data_from_serial(port) {
+	await port.open({baudRate: 9600,});
+
+	if (port.readable) {
+		// start_with_bytes(new ArrayBuffer());
+	}
+
+	while (port.readable) {
+		const reader = port.readable.getReader();
+		try {
+			while (true) {
+				const { value, done } = await reader.read();
+				if (done) break;
+
+				serial_buffer.push(...Array.from(value));
+				let last_three = serial_buffer.slice(-3);
+
+				if (last_three[0] == 10 && last_three[1] == 10 && last_three[2] == 10) {
+					serial_buffer = serial_buffer.slice(0, -4);
+					let ab = new Uint8Array(serial_buffer.slice(-(48 * 4)));
+					serial_buffer = [];
+
+					let data = toData(ab.buffer, 48, 0);
+					let objects = toObjects(data);
+
+					// console.log(objects[0]).write_millis;
+
+					window.objects.push(...objects);
+
+					if (!has_started) {
+						start();
+						has_started = true;
+						live = true;
+					}
+
+					updateall()
+					if (live) {
+						TIME_BOUNDS[0] = Math.max(CURRENT_TIME - (30 * 1000), TIME_BOUNDS[0]);
+						CURRENT_TIME = objects.slice(-1)[0].write_millis;
+					}
+				}
+
+			}
+		} catch (error) {
+		} finally {
+			reader.releaseLock();
+		}
+	}
+	alert("Lost connection...")
 }
 
 map = L.map('map_el').setView([34, -110], 3);
@@ -104,8 +183,9 @@ new BookletWindow("#table", {title:"Data Table", x:700, y:30, w:600, h:200, clos
 new BookletWindow("#info", {title:"Details", x:900, y:500, w:250, h:100, closable:false})
 new BookletWindow("#oneval", {title:"Watch Value", x:900, y:50, w:250, h:120, closable:false})
 
-// actually do ArrayBuffer --> CSV conversion
+// actually do ArrayBuffer --> data conversion
 function toData(buffer, n_ints, n_floats) {
+	// console.log(buffer)
 	var data = [];
 	let bytesPerRow = (4 * n_ints) + (4 * n_floats);
 	let rows = buffer.byteLength / (bytesPerRow);
@@ -120,36 +200,24 @@ function toData(buffer, n_ints, n_floats) {
 			for (var i=0;i<n_floats;i++) row.push(dataview.getFloat32((row_i*bytesPerRow)+(4*i), true)); // little endian!
 		} catch (e) {
 			// length mismatch
-			alert("Error: invalid # of timestamps/values or corrupted data...");
+			// alert("Error: invalid # of timestamps/values or corrupted data...");
 		}
 		// add row to all rows
-		data.push(row);
+		if (row[0] >= 0) {
+			if (last_wm_parse < 0 || (row[0] > (last_wm_parse - 1000) && row[0] < (last_wm_parse + 1000) )) {
+				data.push(row);
+				last_wm_parse = row[0];
+			}
+		}
 	}
 	return data;
 }
-function toCSV(buffer, n_ints, n_floats) {
-	// let data = toData(buffer, n_ints, n_floats);
-	// // make actual CSV
-	// var csv = "";
-	// for (var row_i=0;row_i<data.length;row_i++) {
-	// 	for (var i=0;i<(n_ints+n_floats);i++) {
-	// 		csv += data[row_i][i];
-	// 		if (i < (n_ints+n_floats - 1)) {
-	// 			csv += ",";
-	// 		}
-	// 	}
-	// 	csv += "\n";
-	// }
-	// return csv;
-
-}
-
 
 function toObjects(rawdata) {
 	var out = [];
 	rawdata.forEach(row=>{
 		var o = {};
-		o.write_millis = row[0];
+		o.write_millis = row[0];//Math.round((Number(new Date()) - 1764987313311)/1); //row[0];
 		o.ecu_millis = row[1];
 		o.gps_millis = row[2];
 		o.imu_millis = row[3];
@@ -221,68 +289,48 @@ let hotline_opts = {
 		};
 // TO GET THE DATA FROM UPLOAD #################################################################
 // https://stackoverflow.com/questions/32556664/getting-byte-array-through-input-type-file
-document.querySelector('#fileupload').onchange = go;
-function go() {
+document.querySelector('#fileupload').onchange = gofileupload;
+function gofileupload() {
 	var reader = new FileReader();
 	reader.onload = function() {
-		let n_ints = 48;
-		let n_floats = 0;
-
-		let csv = toCSV(this.result, n_ints, n_floats);
-		let data = toData(this.result, n_ints, n_floats);
-
+		let data = toData(this.result, 48, 0);
 		let objects = toObjects(data);
 
-		console.log(objects)
 		window.objects = objects;
 
+		start();
 
-		// let geojson = JSON.stringify([{"type":"LineString","coordinates":points}]);
-		// var geojson = [{"type": "LineString","coordinates": points}];
-		// console.log(geojson)
-		// MAP_JSON = L.geoJSON(geojson)
-		// MAP_JSON.addTo(map);
+		updateall();
+	}
+	reader.readAsArrayBuffer(document.getElementById("fileupload").files[0]);
+}
 
-
+function start() {
 		MAP_POINTER = L.marker([get_series("lat")[1], get_series("lon")[1]]);
 		MAP_POINTER.addTo(map);
 		updatemap()
+
+
+		// TIME_BOUNDS[1] = arrayMinMax(get_series("write_millis"))[1];
+		// console.log(get_series("write_millis"))
+
+		setInterval(plot, 200);
 
 		var bounds = MAP_HOTLINE.getBounds();
 		try {
 			map.fitBounds(bounds);
 		} catch {
-			console.error(bounds)
+			// console.error(bounds)
 		}
 
 
-		// let csv = "file too large for csv for now...";
-		// console.log(data);
-		// var html = "";
-		// for (var row_i=0;row_i<data.length;row_i++) {
-		// 	html += "<tr>";
-		// 	for (var i=0;i<(n_ints+n_floats);i++) {
-		// 		html += "<td>" + data[row_i][i] + "</td>";
-		// 	}
-		// 	html += "</tr>";
-		// }
-		// console.log(html)
-		// document.getElementById("table").innerHTML = html;
-		// let table = new
-		table.setData(objects);
+		document.getElementById("welcome_container").remove();
 
-		plot();
-		setTimeout(plot, 500)
-		// setTimeout(() => {
-		// map.setView([objects[20].lat,objects[20].lon], 17)
-		// }, 1000)
-		let f = document.getElementById("fileupload").files[0].name;
-		document.getElementById("welcome_container").remove()
-		let d = get_series("unixtime").filter(i=>i>100)[0].toLocaleDateString();
-		document.getElementById("logtitle").innerText = `${d} (${f})`;
-		document.title = `${d} (${f}) - Wazzu Racing Datalog Viewer`
-		let wm = get_series("write_millis")
-		TIME_BOUNDS = [0, wm[wm.length-1]]
+		// let d = get_series("unixtime").filter(i=>i>100)[0].toLocaleDateString();
+		// document.getElementById("logtitle").innerText = `${d} (${f})`;
+		// document.title = `${d} (${fname}) - Wazzu Racing Datalog Viewer`
+		// let wm = get_series("write_millis")
+		// TIME_BOUNDS = [0, wm[wm.length-1]]
 
 		function customFilter(data, filterParams){
 			return data.write_millis > TIME_BOUNDS[0] && data.write_millis < TIME_BOUNDS[1]; //must return a boolean, true if it passes the filter.
@@ -292,19 +340,14 @@ function go() {
 		table.on("rowClick", function(e, row){
 			CURRENT_TIME = row.getData().write_millis;
 			updateall()
-		});
+		})
 		updateInfo()
 
 
-		// let out = document.getElementById("output");
-		// out.innerHTML = csv;
-		// out.style.height = (out.scrollHeight) + 20 + "px";
-		// out.select();
-		// download(csv, "data.csv", "text/plain");
 
 		var a = document.getElementById("download");
 		a.style.display = "inline";
-		a.onclick = (_) => {table.download("csv", f.replace(".bin", ".csv"))};
+		a.onclick = (_) => {table.download("csv", "data.bin".replace(".bin", ".csv"))};
 
 		CURRENT_TIME = cclosest(0)
 
@@ -312,17 +355,16 @@ function go() {
 
 		setTimeout(updateall, 300);
 		setInterval(updatesave, 1000);
-
-	}
-	reader.readAsArrayBuffer(document.getElementById("fileupload").files[0]);
 }
 
 function updatesave() {
-	console.log('saved...')
 	localStorage.setItem("booklet-save", booklet_save())
 }
 
 function plot() {
+
+	let minval = TIME_BOUNDS[0];
+
 	let field1 = document.getElementById("field1").value;
 	let field2 = document.getElementById("field2").value;
 	// let field3 = document.getElementById("field3").value;
@@ -330,15 +372,15 @@ function plot() {
 
 	a = Plotly.newPlot('plot', [
 			{
-				x: get_series("write_millis"),
-				y: get_series(field1),
+				x: get_series("write_millis", minval, TIME_BOUNDS[1]),
+				y: get_series(field1, minval, TIME_BOUNDS[1]),
 				mode: 'lines',
 				type: 'scatter',
 				name: field1
 			},
 			{
-				x: get_series("write_millis"),
-				y: get_series(field2),
+				x: get_series("write_millis", minval, TIME_BOUNDS[1]),
+				y: get_series(field2, minval, TIME_BOUNDS[1]),
 				mode: 'lines',
 				type: 'scatter',
 				yaxis: 'y2',
@@ -376,41 +418,52 @@ function plot() {
         x = data.points[i].x;
     }
 	CURRENT_TIME = x
-		updateall()
+		// updateall()
 
 });
 
 }
+
+
+
 function updateall(fromprog = false) {
-		let min = document.getElementById("plot").layout.xaxis.range[0];
-		let max = document.getElementById("plot").layout.xaxis.range[1];
-		if (min && max) {
-			TIME_BOUNDS = [min, max];
+		let wm = get_series("write_millis");
+		// let min = 111;
+		// let max = 122;
+		// if (document.getElementById("plot").layout) {
+		// 	min = document.getElementById("plot").layout.xaxis.range[0];
+		// 	max = document.getElementById("plot").layout.xaxis.range[1];
+		// 	// if (min != TIME_BOUNDS[0]) live = false;
+		// }
+		// if (min && max) {
+		// 	TIME_BOUNDS = [min, max];
+		// 	if (live) {
+		// 		TIME_BOUNDS = [0, wm[wm.length-1]];
+		// 	}
 			if (CURRENT_TIME < TIME_BOUNDS[0]) CURRENT_TIME = cclosest(TIME_BOUNDS[0])
 			updatemap();
 			table.refreshFilter();
-			table.selectRow(CURRENT_TIME)
+			// table.selectRow(CURRENT_TIME)
 
 			let watchval = document.getElementById("watch").value;
-			console.log(watchval);
 			document.getElementById("watchval").innerHTML = get_series(watchval, CURRENT_TIME-1, CURRENT_TIME+1)[0];
 			let arr = get_series(watchval, TIME_BOUNDS[0], TIME_BOUNDS[1]);
 			const average = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
 			const minmax = arrayMinMax(arr);
 			document.getElementById("watchmore").innerHTML = `<br>
-			<b>Min:</b> ${minmax[0]}<br>
-			<b>Max:</b> ${minmax[1]}<br>
-			<b>Mean:</b> ${average(arr)}<br>
-			`
+				<b>Min:</b> ${minmax[0]}<br>
+				<b>Max:</b> ${minmax[1]}<br>
+				<b>Mean:</b> ${average(arr)}<br>
+				`
 
 
-			// from chatgpt:
-			let horizontal = table.scrollLeft;
-			table.scrollToRow(CURRENT_TIME).then(()=>{table.scrollLeft = horizontal;})
-			// end
-
+			table.setData(window.objects);
+// 			// from chatgpt:
+			// let horizontal = table.scrollLeft;
+			// table.scrollToRow(CURRENT_TIME).then(()=>{table.scrollLeft = horizontal;})
+// 			// end
 			updateInfo()
-		}
+		// }
 		if (!fromprog) {
 			let prog = 10000 * ((CURRENT_TIME - TIME_BOUNDS[0]) / (TIME_BOUNDS[1] - TIME_BOUNDS[0]))
 			document.getElementById("prog").value = prog
@@ -422,17 +475,21 @@ function updateall(fromprog = false) {
 document.getElementById("prog").oninput = () => {
 	let p = document.getElementById("prog").value / 10000;
 	let c = (p * (TIME_BOUNDS[1] - TIME_BOUNDS[0])) + TIME_BOUNDS[0]
-	CURRENT_TIME = cclosest(c)
-		updateall(false)
+	// c2 = cclosest(c)
+	// console.log(c2)
+	CURRENT_TIME = cclosest(c);
+	updateall()
 }
 function cclosest(c) {
 	return get_series("write_millis").reduce(function(prev, curr) {
 	  return (Math.abs(curr - c) < Math.abs(prev - c) ? curr : prev);
 	});
-
 }
 function changetime(a) {
 	// alert()
+	if (live) {
+		live = false;
+	}
 	CURRENT_TIME = cclosest(CURRENT_TIME + a);
 	updateall()
 }
@@ -441,13 +498,14 @@ function updatemap() {
 	let hl = document.getElementById("hotline").value;
 	let points = get_points(hl, TIME_BOUNDS[0], TIME_BOUNDS[1]);
 	let val = points.map(i=>i[2]).filter(i=>!Number.isNaN(i))
-	console.log(val)
 	let minmax = arrayMinMax(val)
+	// console.log(minmax)
 	hotline_opts.min = minmax[0]
 	hotline_opts.max = minmax[1]
-	console.log(hotline_opts)
+	// console.log(hotline_opts)
 	MAP_HOTLINE = L.hotline(points, hotline_opts);
 	MAP_HOTLINE.addTo(map)
+
 	let current = get_points("write_millis", CURRENT_TIME-1, CURRENT_TIME+1)[0]
 	if (current) MAP_POINTER.setLatLng([current[0], current[1]])
 }
@@ -481,6 +539,7 @@ function get_points(z_axis, w_min, w_max) {
 		// layer.bindPopup(t)
 		// markers.push(layer);
 	}
+	// console.log(points);
 	return points;
 }
 //https://stackoverflow.com/questions/42623071/maximum-call-stack-size-exceeded-with-math-min-and-math-max#52613386
