@@ -22,8 +22,9 @@ async function gh_get_subfolder(name, url, path) {
 		link.href = "#";
 		link.innerText = files[i].path.split("/").slice(-1)[0];
 		link.dataset.fullpath = path + "/" + files[i].path;
+		console.log(files[i].url)
 		link.onclick = function() {
-			fetch("https://rawcdn.githack.com/wazzu-racing/log_files/91e11953f3eabcea1758a32aadfb1bd468ef9fbb"+this.dataset.fullpath)
+			fetch("https://rawcdn.githack.com/wazzu-racing/log_files/main"+this.dataset.fullpath)
 				.then(r=>r.bytes())
 				.then(b=>fromfile(b.buffer))
 			fname = "GitHub - "+this.dataset.fullpath
