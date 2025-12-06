@@ -409,7 +409,7 @@ function start() {
 
 		var a = document.getElementById("download");
 		a.style.display = "inline";
-		a.onclick = (_) => {table.download("csv", "data.bin".replace(".bin", ".csv"))};
+		a.onclick = (_) => {table.download("csv", fname.replace(".bin", ".csv"))};
 
 		CURRENT_TIME = cclosest(0)
 
