@@ -21,12 +21,10 @@
 	});
 
 	function handleDrop(nodeId: string, paneType: string, position: DropPosition) {
-		console.log('Drop:', { nodeId, paneType, position });
 		layout = ensureIds(insertPane(layout, nodeId, paneType, position));
 	}
 
 	function handleMove(sourceId: string, targetId: string, position: DropPosition) {
-		console.log('Move:', { sourceId, targetId, position });
 		const newLayout = movePane(layout, sourceId, targetId, position);
 		if (newLayout) {
 			layout = ensureIds(newLayout);
@@ -34,45 +32,13 @@
 	}
 
 	function handleRemove(nodeId: string) {
-		console.log('Remove:', nodeId);
 		const newLayout = removePane(layout, nodeId);
 		if (newLayout) {
 			layout = ensureIds(newLayout);
 		}
 	}
 
-	// Example layouts (commented out)
-	// Complex nested layout:
-	// let layout: LayoutNode = ensureIds({
-	// 	type: 'horizontal',
-	// 	panes: [
-	// 		{
-	// 			type: 'vertical',
-	// 			defaultSize: 50,
-	// 			panes: [
-	// 				{ type: 'leaf', defaultSize: 50 },
-	// 				{ type: 'leaf', defaultSize: 50 }
-	// 			]
-	// 		},
-	// 		{
-	// 			type: 'vertical',
-	// 			defaultSize: 50,
-	// 			panes: [
-	// 				{ type: 'graph', defaultSize: 60 },
-	// 				{ type: 'map', defaultSize: 40 }
-	// 			]
-	// 		}
-	// 	]
-	// });
-
-	// Simple two-pane layout:
-	// let layout: LayoutNode = ensureIds({
-	// 	type: 'horizontal',
-	// 	panes: [
-	// 		{ type: 'leaf', defaultSize: 50 },
-	// 		{ type: 'leaf', defaultSize: 50 }
-	// 	]
-	// });
+	// For more layout examples, see QUICK_START.md
 </script>
 
 <div class="h-screen w-full flex">

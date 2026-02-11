@@ -34,13 +34,17 @@
 		// Create a custom drag image
 		const dragImage = (event.target as HTMLElement).cloneNode(true) as HTMLElement;
 		dragImage.style.opacity = '0.8';
+		dragImage.style.position = 'absolute';
+		dragImage.style.top = '-9999px';
 		document.body.appendChild(dragImage);
 		event.dataTransfer.setDragImage(dragImage, 50, 25);
 
-		// Clean up after a short delay
-		setTimeout(() => {
-			document.body.removeChild(dragImage);
-		}, 0);
+		// Clean up reliably using requestAnimationFrame
+		requestAnimationFrame(() => {
+			if (dragImage.parentNode) {
+				document.body.removeChild(dragImage);
+			}
+		});
 	}
 
 	function handleDragEnd() {

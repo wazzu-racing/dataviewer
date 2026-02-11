@@ -2,13 +2,23 @@ import type { LayoutNode, DropPosition } from './types';
 
 /**
  * Generate a unique ID for a layout node
+ * @returns A unique identifier string in the format "node-{timestamp}-{random}"
+ * @example
+ * const id = generateId(); // "node-1234567890-abc123def"
  */
 export function generateId(): string {
 	return `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
 /**
- * Recursively add IDs to all nodes in a layout tree
+ * Recursively add IDs to all nodes in a layout tree that don't already have one
+ * @param node - The root node of the layout tree
+ * @returns A new layout tree with all nodes having unique IDs
+ * @example
+ * const layoutWithIds = ensureIds({
+ *   type: 'horizontal',
+ *   panes: [{ type: 'leaf' }, { type: 'graph' }]
+ * });
  */
 export function ensureIds(node: LayoutNode): LayoutNode {
 	const newNode = { ...node };
@@ -22,7 +32,13 @@ export function ensureIds(node: LayoutNode): LayoutNode {
 }
 
 /**
- * Find a node by ID in the layout tree
+ * Find a node by ID in the layout tree using depth-first search
+ * @param root - The root node to search from
+ * @param targetId - The ID of the node to find
+ * @returns The found node or null if not found
+ * @example
+ * const node = findNode(layout, 'node-123');
+ * if (node) console.log('Found:', node.type);
  */
 export function findNode(root: LayoutNode, targetId: string): LayoutNode | null {
 	if (root.id === targetId) {
@@ -38,7 +54,14 @@ export function findNode(root: LayoutNode, targetId: string): LayoutNode | null 
 }
 
 /**
- * Find the parent of a node by ID
+ * Find the parent of a node by ID and return the parent with the child's index
+ * @param root - The root node to search from
+ * @param targetId - The ID of the node whose parent to find
+ * @param parent - Internal parameter for recursion (don't pass manually)
+ * @returns An object with the parent node and the child's index, or null if not found
+ * @example
+ * const result = findParent(layout, 'node-123');
+ * if (result) console.log('Parent:', result.parent, 'Index:', result.index);
  */
 export function findParent(
 	root: LayoutNode,
@@ -62,26 +85,34 @@ export function findParent(
 }
 
 /**
- * Insert a new pane at the specified position relative to a target node
+ * Insert a new pane or existing node at the specified position relative to a target node
+ * @param root - The root layout node
+ * @param targetId - ID of the target node to insert relative to
+ * @param nodeOrType - Either a LayoutNode to insert or a string type to create a new pane
+ * @param position - Where to insert relative to target
  */
-export function insertPane(
+function insertNodeInternal(
 	root: LayoutNode,
 	targetId: string,
-	newPaneType: string,
+	nodeOrType: LayoutNode | string,
 	position: DropPosition
 ): LayoutNode {
-	const newNode = structuredClone(root);
-	const target = findNode(newNode, targetId);
-	const parentInfo = findParent(newNode, targetId);
+	const newRoot = structuredClone(root);
+	const target = findNode(newRoot, targetId);
+	const parentInfo = findParent(newRoot, targetId);
 
-	if (!target) return newNode;
+	if (!target) return newRoot;
 
-	const newPane: LayoutNode = {
-		type: newPaneType,
-		id: generateId(),
-		defaultSize: 50,
-		minSize: 20
-	};
+	// Create the node to insert
+	const nodeToInsert: LayoutNode =
+		typeof nodeOrType === 'string'
+			? {
+					type: nodeOrType,
+					id: generateId(),
+					defaultSize: 50,
+					minSize: 20
+				}
+			: nodeOrType;
 
 	// Handle center drop - replace target with a group containing both panes
 	if (position === 'center') {
@@ -91,7 +122,7 @@ export function insertPane(
 			id: generateId(),
 			panes: [
 				{ ...target, defaultSize: 50 },
-				{ ...newPane, defaultSize: 50 }
+				{ ...nodeToInsert, defaultSize: 50 }
 			]
 		};
 
@@ -99,10 +130,10 @@ export function insertPane(
 		if (parentInfo?.parent && parentInfo.index >= 0) {
 			parentInfo.parent.panes![parentInfo.index] = newGroup;
 		} else {
-			// Target is root - this shouldn't happen in practice
+			// Target is root
 			return newGroup;
 		}
-		return newNode;
+		return newRoot;
 	}
 
 	// Handle edge drops (top, bottom, left, right)
@@ -118,7 +149,7 @@ export function insertPane(
 		if (parent.type === requiredDirection) {
 			// Parent has correct direction, insert into parent's panes
 			const insertIndex = isBeforePosition ? index : index + 1;
-			parent.panes!.splice(insertIndex, 0, newPane);
+			parent.panes!.splice(insertIndex, 0, nodeToInsert);
 
 			// Recalculate sizes
 			const numPanes = parent.panes!.length;
@@ -126,18 +157,18 @@ export function insertPane(
 				pane.defaultSize = 100 / numPanes;
 			});
 		} else {
-			// Parent has wrong direction, need to wrap target and new pane
+			// Parent has wrong direction, wrap target and new pane in a group
 			const newGroup: LayoutNode = {
 				type: requiredDirection,
 				id: generateId(),
 				panes: isBeforePosition
 					? [
-							{ ...newPane, defaultSize: 50 },
+							{ ...nodeToInsert, defaultSize: 50 },
 							{ ...target, defaultSize: 50 }
 						]
 					: [
 							{ ...target, defaultSize: 50 },
-							{ ...newPane, defaultSize: 50 }
+							{ ...nodeToInsert, defaultSize: 50 }
 						]
 			};
 			parent.panes![index] = newGroup;
@@ -149,22 +180,48 @@ export function insertPane(
 			id: generateId(),
 			panes: isBeforePosition
 				? [
-						{ ...newPane, defaultSize: 50 },
+						{ ...nodeToInsert, defaultSize: 50 },
 						{ ...target, defaultSize: 50 }
 					]
 				: [
 						{ ...target, defaultSize: 50 },
-						{ ...newPane, defaultSize: 50 }
+						{ ...nodeToInsert, defaultSize: 50 }
 					]
 		};
 		return newGroup;
 	}
 
-	return newNode;
+	return newRoot;
 }
 
 /**
- * Remove a pane from the layout tree
+ * Insert a new pane of the specified type at a position relative to a target node
+ * @param root - The root layout node
+ * @param targetId - ID of the target node to insert relative to
+ * @param newPaneType - The type string for the new pane (e.g., 'leaf', 'graph', 'map')
+ * @param position - Where to insert: 'top', 'bottom', 'left', 'right', or 'center'
+ * @returns A new layout tree with the pane inserted
+ * @example
+ * const newLayout = insertPane(layout, 'node-123', 'graph', 'right');
+ */
+export function insertPane(
+	root: LayoutNode,
+	targetId: string,
+	newPaneType: string,
+	position: DropPosition
+): LayoutNode {
+	return insertNodeInternal(root, targetId, newPaneType, position);
+}
+
+/**
+ * Remove a pane from the layout tree and automatically collapse single-child parents
+ * @param root - The root layout node
+ * @param targetId - ID of the node to remove
+ * @returns The updated layout tree, or null if the operation failed
+ * @remarks If removing a node leaves its parent with only one child, the parent is collapsed
+ * @example
+ * const newLayout = removePane(layout, 'node-123');
+ * if (newLayout) layout = ensureIds(newLayout);
  */
 export function removePane(root: LayoutNode, targetId: string): LayoutNode | null {
 	const newNode = structuredClone(root);
@@ -203,7 +260,15 @@ export function removePane(root: LayoutNode, targetId: string): LayoutNode | nul
 }
 
 /**
- * Check if targetId is a descendant of nodeId
+ * Check if targetId is a descendant of nodeId (prevents circular references)
+ * @param root - The root layout node
+ * @param nodeId - The potential ancestor node ID
+ * @param targetId - The potential descendant node ID
+ * @returns True if targetId is a descendant of nodeId, false otherwise
+ * @example
+ * if (isDescendant(layout, 'parent-id', 'child-id')) {
+ *   console.log('Cannot drop parent onto its own child');
+ * }
  */
 export function isDescendant(root: LayoutNode, nodeId: string, targetId: string): boolean {
 	const node = findNode(root, nodeId);
@@ -223,7 +288,16 @@ export function isDescendant(root: LayoutNode, nodeId: string, targetId: string)
 }
 
 /**
- * Move a pane from one location to another
+ * Move a pane from one location to another in the layout tree
+ * @param root - The root layout node
+ * @param sourceId - ID of the node to move
+ * @param targetId - ID of the target node to move relative to
+ * @param position - Where to position relative to target: 'top', 'bottom', 'left', 'right', or 'center'
+ * @returns The updated layout tree, or the original if the move is invalid
+ * @remarks Prevents moving a node onto itself or onto its own descendants
+ * @example
+ * const newLayout = movePane(layout, 'node-123', 'node-456', 'right');
+ * if (newLayout) layout = ensureIds(newLayout);
  */
 export function movePane(
 	root: LayoutNode,
@@ -231,44 +305,33 @@ export function movePane(
 	targetId: string,
 	position: DropPosition
 ): LayoutNode | null {
-	console.log('movePane called:', { sourceId, targetId, position });
-
 	// Can't move onto itself
 	if (sourceId === targetId) {
-		console.log('Cannot move onto itself');
 		return root;
 	}
 
 	// Can't move a node onto its own descendant (would create invalid tree)
 	if (isDescendant(root, sourceId, targetId)) {
-		console.warn('Cannot move a node onto its own descendant');
 		return root;
 	}
 
-	// Find the source node - make a deep copy to preserve everything
+	// Find and clone the source node
 	const sourceNode = findNode(root, sourceId);
 	if (!sourceNode) {
-		console.warn('Source node not found:', sourceId);
 		return root;
 	}
 
-	// Deep clone the source node to preserve all properties
 	const sourceNodeCopy = structuredClone(sourceNode);
-	console.log('Source node found:', sourceNodeCopy);
 
 	// Remove the source node from its current location
 	const withoutSource = removePane(root, sourceId);
 	if (!withoutSource) {
-		console.warn('Failed to remove source node');
 		return root;
 	}
-
-	console.log('Source removed, now inserting at target');
 
 	// Check if target still exists after removal (it might have been collapsed)
 	const targetStillExists = findNode(withoutSource, targetId);
 	if (!targetStillExists) {
-		console.log('Target was collapsed, creating new root');
 		// Target was removed during collapse, insert at root level
 		const newRoot: LayoutNode = {
 			type: position === 'top' || position === 'bottom' ? 'vertical' : 'horizontal',
@@ -281,101 +344,6 @@ export function movePane(
 		return newRoot;
 	}
 
-	// Now we need to insert the actual source node at the target position
-	// We'll do this manually instead of using insertPane to preserve the node
-	const result = insertPaneNode(withoutSource, targetId, sourceNodeCopy, position);
-	console.log('Move complete');
-	return result;
-}
-
-/**
- * Insert an actual node (not just a type) at a position
- */
-function insertPaneNode(
-	root: LayoutNode,
-	targetId: string,
-	nodeToInsert: LayoutNode,
-	position: DropPosition
-): LayoutNode {
-	const newRoot = structuredClone(root);
-	const target = findNode(newRoot, targetId);
-	const parentInfo = findParent(newRoot, targetId);
-
-	if (!target) return newRoot;
-
-	// Handle center drop - replace target with a group containing both
-	if (position === 'center') {
-		const direction = Math.random() > 0.5 ? 'horizontal' : 'vertical';
-		const newGroup: LayoutNode = {
-			type: direction,
-			id: generateId(),
-			panes: [
-				{ ...target, defaultSize: 50 },
-				{ ...nodeToInsert, defaultSize: 50 }
-			]
-		};
-
-		if (parentInfo?.parent && parentInfo.index >= 0) {
-			parentInfo.parent.panes![parentInfo.index] = newGroup;
-		} else {
-			return newGroup;
-		}
-		return newRoot;
-	}
-
-	// Handle edge drops
-	const isVerticalPosition = position === 'top' || position === 'bottom';
-	const isBeforePosition = position === 'top' || position === 'left';
-	const requiredDirection = isVerticalPosition ? 'vertical' : 'horizontal';
-
-	if (parentInfo?.parent) {
-		const parent = parentInfo.parent;
-		const index = parentInfo.index;
-
-		if (parent.type === requiredDirection) {
-			// Parent has correct direction, insert into parent's panes
-			const insertIndex = isBeforePosition ? index : index + 1;
-			parent.panes!.splice(insertIndex, 0, nodeToInsert);
-
-			// Recalculate sizes
-			const numPanes = parent.panes!.length;
-			parent.panes!.forEach((pane) => {
-				pane.defaultSize = 100 / numPanes;
-			});
-		} else {
-			// Parent has wrong direction, wrap target and new pane
-			const newGroup: LayoutNode = {
-				type: requiredDirection,
-				id: generateId(),
-				panes: isBeforePosition
-					? [
-							{ ...nodeToInsert, defaultSize: 50 },
-							{ ...target, defaultSize: 50 }
-						]
-					: [
-							{ ...target, defaultSize: 50 },
-							{ ...nodeToInsert, defaultSize: 50 }
-						]
-			};
-			parent.panes![index] = newGroup;
-		}
-	} else {
-		// Target is root - wrap in a group
-		const newGroup: LayoutNode = {
-			type: requiredDirection,
-			id: generateId(),
-			panes: isBeforePosition
-				? [
-						{ ...nodeToInsert, defaultSize: 50 },
-						{ ...target, defaultSize: 50 }
-					]
-				: [
-						{ ...target, defaultSize: 50 },
-						{ ...nodeToInsert, defaultSize: 50 }
-					]
-		};
-		return newGroup;
-	}
-
-	return newRoot;
+	// Insert the source node at the target position
+	return insertNodeInternal(withoutSource, targetId, sourceNodeCopy, position);
 }

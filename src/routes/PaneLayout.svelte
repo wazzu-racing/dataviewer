@@ -23,7 +23,6 @@
 			operation: 'move'
 		};
 
-		// Store in drag state for access during dragover
 		startDrag(dragItem);
 
 		event.dataTransfer.effectAllowed = 'move';
@@ -39,6 +38,9 @@
 		target.style.opacity = '1';
 		endDrag();
 	}
+
+	// Get the node ID with a fallback to prevent undefined access
+	$: nodeId = layout.id || '';
 </script>
 
 {#if layout.type === 'horizontal' || layout.type === 'vertical'}
@@ -63,13 +65,13 @@
 	</PaneGroup>
 {:else}
 	<!-- Leaf or custom pane types with drop zone -->
-	<DropZone nodeId={layout.id || ''} {onDrop} {onMove}>
+	<DropZone {nodeId} {onDrop} {onMove}>
 		<div class="h-full w-full bg-white border border-gray-200 relative pane-content">
 			<!-- Drag Handle Header -->
 			<div
 				class="drag-handle"
 				draggable="true"
-				on:dragstart={(e) => handleDragStart(e, layout.id || '', layout.type)}
+				on:dragstart={(e) => handleDragStart(e, nodeId, layout.type)}
 				on:dragend={handleDragEnd}
 				role="button"
 				tabindex="0"
@@ -85,7 +87,7 @@
 				</span>
 				<button
 					class="remove-button"
-					on:click|stopPropagation={() => onRemove(layout.id || '')}
+					on:click|stopPropagation={() => onRemove(nodeId)}
 					title="Remove pane"
 				>
 					×
@@ -96,10 +98,10 @@
 			<div class="pane-body">
 				{#if layout.type === 'leaf'}
 					<p class="text-gray-600">Empty content area (depth: {depth})</p>
-					<p class="text-sm text-gray-400 mt-2">ID: {layout.id}</p>
+					<p class="text-sm text-gray-400 mt-2">ID: {nodeId}</p>
 				{:else}
 					<p class="text-gray-600">Custom pane type: {layout.type} (depth: {depth})</p>
-					<p class="text-sm text-gray-400 mt-2">ID: {layout.id}</p>
+					<p class="text-sm text-gray-400 mt-2">ID: {nodeId}</p>
 				{/if}
 			</div>
 		</div>

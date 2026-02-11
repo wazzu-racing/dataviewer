@@ -10,6 +10,9 @@
 		position: DropPosition
 	) => void = () => {};
 
+	// Constants for drop position detection
+	const CENTER_DROP_THRESHOLD = 0.25; // 25% of smallest dimension
+
 	let isDraggingOver = false;
 	let dropPosition: DropPosition | null = null;
 
@@ -40,7 +43,7 @@
 		const centerY = rect.height / 2;
 
 		const distanceFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-		const threshold = Math.min(rect.width, rect.height) * 0.25;
+		const threshold = Math.min(rect.width, rect.height) * CENTER_DROP_THRESHOLD;
 
 		if (distanceFromCenter < threshold) {
 			dropPosition = 'center';
@@ -85,10 +88,7 @@
 		event.preventDefault();
 		event.stopPropagation();
 
-		console.log('DropZone handleDrop called:', { nodeId, dropPosition, dragState: $dragState });
-
 		if (!dropPosition || !$dragState) {
-			console.log('Early return - no dropPosition or dragState');
 			return;
 		}
 
@@ -97,15 +97,11 @@
 
 		if (dragItem.operation === 'move' && dragItem.nodeId) {
 			// Moving an existing pane
-			console.log('Calling onMove:', dragItem.nodeId, nodeId, dropPosition);
 			if (dragItem.nodeId !== nodeId) {
 				onMove(dragItem.nodeId, nodeId, dropPosition);
-			} else {
-				console.log('Skipping move - source === target');
 			}
 		} else if (dragItem.paneType) {
 			// Adding a new pane
-			console.log('Calling onDrop:', nodeId, dragItem.paneType, dropPosition);
 			onDrop(nodeId, dragItem.paneType, dropPosition);
 		}
 
@@ -125,27 +121,22 @@
 	<slot />
 
 	{#if isDraggingOver && dropPosition}
+		{@const isMove = dragOperation === 'move'}
+		{@const orientationClass =
+			dropPosition === 'top' || dropPosition === 'bottom'
+				? 'horizontal'
+				: dropPosition === 'center'
+					? 'center'
+					: 'vertical'}
 		<div class="drop-indicator-container">
-			{#if dropPosition === 'top'}
-				<div class="drop-indicator horizontal top {dragOperation === 'move' ? 'move' : ''}"></div>
-			{:else if dropPosition === 'bottom'}
-				<div
-					class="drop-indicator horizontal bottom {dragOperation === 'move' ? 'move' : ''}"
-				></div>
-			{:else if dropPosition === 'left'}
-				<div class="drop-indicator vertical left {dragOperation === 'move' ? 'move' : ''}"></div>
-			{:else if dropPosition === 'right'}
-				<div class="drop-indicator vertical right {dragOperation === 'move' ? 'move' : ''}"></div>
-			{:else if dropPosition === 'center'}
-				<div class="drop-indicator center {dragOperation === 'move' ? 'move' : ''}">
-					<div class="center-overlay {dragOperation === 'move' ? 'move' : ''}">
-						<div class="center-icon">{dragOperation === 'move' ? '↔' : '+'}</div>
-						<div class="center-text">
-							{dragOperation === 'move' ? 'Move here' : 'Drop to split'}
-						</div>
+			<div class="drop-indicator {orientationClass} {dropPosition} {isMove ? 'move' : ''}">
+				{#if dropPosition === 'center'}
+					<div class="center-overlay {isMove ? 'move' : ''}">
+						<div class="center-icon">{isMove ? '↔' : '+'}</div>
+						<div class="center-text">{isMove ? 'Move here' : 'Drop to split'}</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</div>
 	{/if}
 </div>
