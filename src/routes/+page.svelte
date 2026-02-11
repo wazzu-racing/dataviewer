@@ -1,25 +1,76 @@
 <script lang="ts">
-	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
+	import PaneLayout from './PaneLayout.svelte';
+	import type { LayoutNode } from '$lib/types';
+
+	// Example: Complex nested layout
+	// let layout: LayoutNode = {
+	// 	type: 'horizontal',
+	// 	panes: [
+	// 		{
+	// 			type: 'vertical',
+	// 			defaultSize: 50,
+	// 			panes: [
+	// 				{
+	// 					type: 'leaf',
+	// 					defaultSize: 50
+	// 				},
+	// 				{
+	// 					type: 'leaf',
+	// 					defaultSize: 50
+	// 				}
+	// 			]
+	// 		},
+	// 		{
+	// 			type: 'vertical',
+	// 			defaultSize: 50,
+	// 			panes: [
+	// 				{
+	// 					type: 'graph',
+	// 					defaultSize: 60
+	// 				},
+	// 				{
+	// 					type: 'map',
+	// 					defaultSize: 40
+	// 				}
+	// 			]
+	// 		}
+	// 	]
+	// };
+
+	// Example: Simple two-pane layout
+	// let layout: LayoutNode = {
+	// 	type: 'horizontal',
+	// 	panes: [
+	// 		{ type: 'leaf', defaultSize: 50 },
+	// 		{ type: 'leaf', defaultSize: 50 }
+	// 	]
+	// };
+
+	// Example: Three levels deep
+	let layout: LayoutNode = {
+		type: 'horizontal',
+		panes: [
+			{
+				type: 'vertical',
+				defaultSize: 33,
+				panes: [
+					{ type: 'leaf', defaultSize: 50 },
+					{
+						type: 'horizontal',
+						defaultSize: 50,
+						panes: [
+							{ type: 'graph', defaultSize: 50 },
+							{ type: 'map', defaultSize: 50 }
+						]
+					}
+				]
+			},
+			{ type: 'leaf', defaultSize: 33 },
+			{ type: 'leaf', defaultSize: 34 }
+		]
+	};
 </script>
 
-<div class="h-screen w-full bg-gray-50">
-	<PaneGroup direction="horizontal" class="h-full">
-		<Pane defaultSize={50} minSize={20} class="flex items-center justify-center">
-			<div class="h-full w-full bg-white border-r border-gray-200 p-6">
-				<h2 class="text-2xl font-semibold text-gray-800 mb-4">Pane 1</h2>
-				<p class="text-gray-600">Left pane content goes here</p>
-			</div>
-		</Pane>
-
-		<PaneResizer
-			class="w-1 bg-gray-300 hover:bg-blue-500 transition-colors duration-200 cursor-col-resize active:bg-blue-600"
-		/>
-
-		<Pane defaultSize={50} minSize={20} class="flex items-center justify-center">
-			<div class="h-full w-full bg-white p-6">
-				<h2 class="text-2xl font-semibold text-gray-800 mb-4">Pane 2</h2>
-				<p class="text-gray-600">Right pane content goes here</p>
-			</div>
-		</Pane>
-	</PaneGroup>
+<div class="h-screen w-full">
+	<PaneLayout {layout} />
 </div>
