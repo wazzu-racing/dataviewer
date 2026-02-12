@@ -26,6 +26,19 @@
 		if (newLayout) {
 			layout = ensureIds(newLayout);
 		}
+
+		// If we removed the last pane, replace with an empty leaf pane
+		// This ensures there's always a drop zone available
+		if (
+			layout.type === 'horizontal' || layout.type === 'vertical'
+				? !layout.panes || layout.panes.length === 0
+				: false
+		) {
+			layout = ensureIds({
+				type: 'leaf',
+				defaultSize: 100
+			});
+		}
 	}
 
 	// For more layout examples, see QUICK_START.md

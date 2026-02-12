@@ -98,8 +98,10 @@
 			<!-- Pane Content -->
 			<div class="pane-body">
 				{#if layout.type === 'leaf'}
-					<p class="text-gray-600">Empty content area (depth: {depth})</p>
-					<p class="text-sm text-gray-400 mt-2">ID: {nodeId}</p>
+					<div class="text-center">
+						<p class="text-gray-400 text-lg mb-2">👈 Drag a pane from the sidebar</p>
+						<p class="text-gray-500 text-sm">Drop it here or on the edges to split the view</p>
+					</div>
 				{:else if layout.type === 'loaddata'}
 					<ReadData onClose={() => onRemove(nodeId)} />
 					<!-- <p class="text-gray-600">Custom pane type: {layout.type} (depth: {depth})</p>
@@ -183,6 +185,9 @@
 		flex: 1;
 		padding: 1.5rem;
 		overflow: auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.capitalize {

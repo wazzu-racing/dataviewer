@@ -31,7 +31,7 @@
 			data.push(row);
 		}
 
-		let out = [];
+		let out: DataLine[] = [];
 
 		data.forEach((row) => {
 			// BUG: there are so many magic numbers here
