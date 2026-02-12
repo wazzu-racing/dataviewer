@@ -7,17 +7,7 @@
 	// Start with a simple layout
 	let layout: LayoutNode = ensureIds({
 		type: 'horizontal',
-		panes: [
-			{
-				type: 'vertical',
-				defaultSize: 50,
-				panes: [
-					{ type: 'leaf', defaultSize: 50 },
-					{ type: 'leaf', defaultSize: 50 }
-				]
-			},
-			{ type: 'leaf', defaultSize: 50 }
-		]
+		panes: [{ type: 'loaddata', defaultSize: 100 }]
 	});
 
 	function handleDrop(nodeId: string, paneType: string, position: DropPosition) {
