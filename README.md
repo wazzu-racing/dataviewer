@@ -31,7 +31,7 @@ You can preview the production build with `npm run preview`.
   - [ ] Live data
 - Types of Graph
   - [ ] Map
-  - [ ] Line graph
+  - [x] Line graph
   - [ ] Gauge
   - [ ] Data Table
   - [ ] Watch Single Value

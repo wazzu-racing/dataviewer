@@ -4,6 +4,7 @@
 	import DropZone from '$lib/components/DropZone.svelte';
 	import { startDrag, endDrag } from '$lib/stores/dragStore';
 	import ReadData from '$lib/components/ReadData.svelte';
+	import Graph from '$lib/components/Graph.svelte';
 
 	export let layout: LayoutNode;
 	export let depth: number = 0;
@@ -104,8 +105,8 @@
 					</div>
 				{:else if layout.type === 'loaddata'}
 					<ReadData onClose={() => onRemove(nodeId)} />
-					<!-- <p class="text-gray-600">Custom pane type: {layout.type} (depth: {depth})</p>
-					<p class="text-sm text-gray-400 mt-2">ID: {nodeId}</p> -->
+				{:else if layout.type === 'graph'}
+					<Graph onClose={() => onRemove(nodeId)} />
 				{:else}
 					<p class="text-gray-600">Custom pane type: {layout.type} (depth: {depth})</p>
 					<p class="text-sm text-gray-400 mt-2">ID: {nodeId}</p>
