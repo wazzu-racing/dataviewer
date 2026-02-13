@@ -16,8 +16,8 @@
 	let isDraggingOver = false;
 	let dropPosition: DropPosition | null = null;
 
-	$: dragOperation = $dragState?.operation || null;
-	$: dragSourceId = $dragState?.nodeId || null;
+	$: dragOperation = $dragState?.operation ?? null;
+	$: dragSourceId = $dragState?.nodeId ?? null;
 
 	function handleDragOver(event: DragEvent) {
 		event.preventDefault();
@@ -88,13 +88,16 @@
 		event.preventDefault();
 		event.stopPropagation();
 
-		if (!dropPosition || !$dragState) {
+		if (!dropPosition || !$dragState || typeof $dragState !== 'object' || $dragState === null) {
+			isDraggingOver = false;
+			dropPosition = null;
 			return;
 		}
 
 		// Use the drag state store instead of trying to parse event data
 		const dragItem = $dragState;
 
+		// Type guard to ensure dragItem has expected properties
 		if (dragItem.operation === 'move' && dragItem.nodeId) {
 			// Moving an existing pane
 			if (dragItem.nodeId !== nodeId) {

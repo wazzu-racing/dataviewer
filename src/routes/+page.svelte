@@ -11,6 +11,11 @@
 	});
 
 	function handleDrop(nodeId: string, paneType: string, position: DropPosition) {
+		// Guard against empty or invalid nodeId
+		if (!nodeId || nodeId.trim() === '') {
+			console.warn('Cannot drop pane: invalid nodeId');
+			return;
+		}
 		layout = ensureIds(insertPane(layout, nodeId, paneType, position));
 	}
 
