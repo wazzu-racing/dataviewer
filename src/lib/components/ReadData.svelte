@@ -2,8 +2,6 @@
 	import { type DataLine, NUM_FIELDS } from '$lib/types';
 	import { data as globalData } from '$lib/data.svelte';
 
-	export let onClose: () => void = () => {};
-
 	let files: FileList;
 
 	async function parse() {
@@ -90,9 +88,6 @@
 		});
 
 		globalData.lines = out;
-
-		// Close the pane after successfully loading the data
-		onClose();
 	}
 </script>
 
