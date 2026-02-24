@@ -1,18 +1,24 @@
 <script lang="ts">
 	import { data as globalData } from '$lib/data.svelte';
 	import { browser } from '$app/environment';
+	import { loadLeaflet } from '$lib/leaflet';
 
 	let mapContainer: HTMLDivElement | undefined = $state();
+	// Plain variables — not reactive state; only used inside effects, never in template
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let leafletMap: any = $state(null);
+	let leafletMap: any = null;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let trackLine: any = $state(null);
+	let trackLine: any = null;
 
 	$effect(() => {
 		if (!browser || !mapContainer) return;
 
-		import('leaflet').then((L) => {
-			// Import leaflet CSS dynamically
+		let cancelled = false;
+
+		loadLeaflet().then((L) => {
+			if (cancelled) return;
+
+			// Import leaflet CSS once
 			if (!document.getElementById('leaflet-css')) {
 				const link = document.createElement('link');
 				link.id = 'leaflet-css';
@@ -67,6 +73,7 @@
 		});
 
 		return () => {
+			cancelled = true;
 			if (leafletMap) {
 				leafletMap.remove();
 				leafletMap = null;

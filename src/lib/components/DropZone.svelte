@@ -4,7 +4,7 @@
 	type Props = {
 		nodeId: string;
 		onDrop: (nodeId: string, widgetType: PaneWidgetType, position: DropPosition) => void;
-		children: import('svelte').Snippet;
+		children?: import('svelte').Snippet;
 	};
 
 	let { nodeId, onDrop, children }: Props = $props();
@@ -74,7 +74,7 @@
 	ondragleave={handleDragLeave}
 	ondrop={handleDrop}
 >
-	{@render children()}
+	{#if children}{@render children()}{/if}
 
 	{#if isDraggingOver && dropPosition}
 		<!-- Directional drop indicators -->
