@@ -53,3 +53,39 @@ export type DataLine = {
 };
 
 export const NUM_FIELDS = 48;
+
+// ---------------------------------------------------------------------------
+// Pane / windowing system types
+// ---------------------------------------------------------------------------
+
+/** All widget types that can occupy a pane */
+export type PaneWidgetType = 'graph' | 'map' | 'table' | 'gauge' | 'load-data';
+
+/**
+ * A node in the recursive layout tree.
+ * - 'horizontal' / 'vertical' → group nodes with children
+ * - PaneWidgetType → leaf nodes containing a widget
+ */
+export type LayoutNode = {
+	id: string;
+	type: 'horizontal' | 'vertical' | PaneWidgetType;
+	panes?: LayoutNode[];
+	defaultSize?: number; // 0–100 percentage within the parent group
+	minSize?: number; // 0–100 percentage minimum
+	config?: Record<string, unknown>; // widget-specific settings (e.g. which fields to plot)
+};
+
+/** Where a dragged widget is being dropped relative to an existing pane */
+export type DropPosition = 'top' | 'bottom' | 'left' | 'right' | 'center';
+
+/** State for a free-floating (popped-out) panel */
+export type FloatingPaneState = {
+	id: string;
+	type: PaneWidgetType;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	zIndex: number;
+	config?: Record<string, unknown>;
+};
