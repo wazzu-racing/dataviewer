@@ -55,6 +55,16 @@ export type DataLine = {
 export const NUM_FIELDS = 48;
 
 // ---------------------------------------------------------------------------
+// Widget configuration types
+// ---------------------------------------------------------------------------
+
+/** Per-pane configuration for the Graph widget */
+export type GraphConfig = {
+	xField: string; // e.g. 'time'
+	yFields: string[]; // e.g. ['rpm', 'tps']
+};
+
+// ---------------------------------------------------------------------------
 // Pane / windowing system types
 // ---------------------------------------------------------------------------
 

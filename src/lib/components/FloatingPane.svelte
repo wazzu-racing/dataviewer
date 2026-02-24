@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { draggable } from '@neodrag/svelte';
-	import type { FloatingPaneState, PaneWidgetType } from '$lib/types';
+	import type { FloatingPaneState, PaneWidgetType, GraphConfig } from '$lib/types';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
 	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
@@ -12,9 +12,10 @@
 		onClose: (id: string) => void;
 		onFocus: (id: string) => void;
 		onDock: (id: string) => void;
+		onConfigChange: (id: string, config: Record<string, unknown>) => void;
 	};
 
-	let { pane, onClose, onFocus, onDock }: Props = $props();
+	let { pane, onClose, onFocus, onDock, onConfigChange }: Props = $props();
 
 	const WIDGET_LABELS: Record<PaneWidgetType, string> = {
 		graph: 'Graph',
@@ -68,7 +69,10 @@
 	<!-- Widget content -->
 	<div class="min-h-0 flex-1 overflow-hidden">
 		{#if pane.type === 'graph'}
-			<GraphWidget />
+			<GraphWidget
+				config={pane.config as GraphConfig | undefined}
+				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
+			/>
 		{:else if pane.type === 'map'}
 			<MapWidget />
 		{:else if pane.type === 'table'}

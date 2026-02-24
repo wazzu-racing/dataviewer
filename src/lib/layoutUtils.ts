@@ -166,6 +166,25 @@ export function removePane(root: LayoutNode, targetId: string): LayoutNode | nul
 	return cloned;
 }
 
+/**
+ * Update the config of a node by id.
+ * Returns a new tree with the config updated; does nothing if node not found.
+ */
+export function updateConfig(
+	root: LayoutNode,
+	targetId: string,
+	config: Record<string, unknown>
+): LayoutNode {
+	if (root.id === targetId) {
+		return { ...root, config };
+	}
+	if (!root.panes) return root;
+	return {
+		...root,
+		panes: root.panes.map((child) => updateConfig(child, targetId, config))
+	};
+}
+
 function _removeNode(node: LayoutNode, targetId: string): void {
 	if (!node.panes) return;
 

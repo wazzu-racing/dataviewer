@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
-	import type { LayoutNode, DropPosition, PaneWidgetType } from '$lib/types';
+	import type { LayoutNode, DropPosition, PaneWidgetType, GraphConfig } from '$lib/types';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import DropZone from '$lib/components/DropZone.svelte';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
@@ -14,9 +14,10 @@
 		onDrop: (nodeId: string, widgetType: PaneWidgetType, position: DropPosition) => void;
 		onRemove: (nodeId: string) => void;
 		onPopOut: (nodeId: string) => void;
+		onConfigChange: (nodeId: string, config: Record<string, unknown>) => void;
 	};
 
-	let { layout, onDrop, onRemove, onPopOut }: Props = $props();
+	let { layout, onDrop, onRemove, onPopOut, onConfigChange }: Props = $props();
 
 	const WIDGET_LABELS: Record<PaneWidgetType, string> = {
 		graph: 'Graph',
@@ -35,7 +36,7 @@
 		{#each layout.panes ?? [] as child, i (child.id)}
 			<Pane defaultSize={child.defaultSize ?? 50} minSize={child.minSize ?? 5}>
 				<!-- Recurse -->
-				<PaneLayout layout={child} {onDrop} {onRemove} {onPopOut} />
+				<PaneLayout layout={child} {onDrop} {onRemove} {onPopOut} {onConfigChange} />
 			</Pane>
 			{#if i < (layout.panes?.length ?? 0) - 1}
 				<PaneResizer
@@ -76,7 +77,10 @@
 		<div class="min-h-0 flex-1 overflow-hidden">
 			<DropZone nodeId={layout.id} {onDrop}>
 				{#if layout.type === 'graph'}
-					<GraphWidget />
+					<GraphWidget
+						config={layout.config as GraphConfig | undefined}
+						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
+					/>
 				{:else if layout.type === 'map'}
 					<MapWidget />
 				{:else if layout.type === 'table'}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import type { LayoutNode, FloatingPaneState, PaneWidgetType, DropPosition } from '$lib/types';
-	import { ensureIds, insertPane, removePane, findNode } from '$lib/layoutUtils';
+	import { ensureIds, insertPane, removePane, findNode, updateConfig } from '$lib/layoutUtils';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
@@ -137,6 +137,17 @@
 			panes: [{ ...layout, defaultSize: 75 }, newNode]
 		});
 	}
+
+	// ---------------------------------------------------------------------------
+	// Config change callbacks
+	// ---------------------------------------------------------------------------
+	function handleLayoutConfigChange(nodeId: string, config: Record<string, unknown>) {
+		layout = updateConfig(layout, nodeId, config);
+	}
+
+	function handleFloatConfigChange(id: string, config: Record<string, unknown>) {
+		floatingPanes = floatingPanes.map((p) => (p.id === id ? { ...p, config } : p));
+	}
 </script>
 
 <div class="flex h-screen w-full overflow-hidden bg-stone-100">
@@ -145,7 +156,13 @@
 
 	<!-- Main tiled layout area + floating pane container -->
 	<div class="relative flex-1 overflow-hidden">
-		<PaneLayout {layout} onDrop={handleDrop} onRemove={handleRemove} onPopOut={handlePopOut} />
+		<PaneLayout
+			{layout}
+			onDrop={handleDrop}
+			onRemove={handleRemove}
+			onPopOut={handlePopOut}
+			onConfigChange={handleLayoutConfigChange}
+		/>
 
 		<!-- Floating panes rendered on top -->
 		{#each floatingPanes as pane (pane.id)}
@@ -154,6 +171,7 @@
 				onClose={handleFloatClose}
 				onFocus={handleFloatFocus}
 				onDock={handleDock}
+				onConfigChange={handleFloatConfigChange}
 			/>
 		{/each}
 	</div>
