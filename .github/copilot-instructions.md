@@ -99,3 +99,23 @@ Whenever you write documentation in markdown files, make sure to put them in the
 `docs/` folder. Do not put them directly in the root folder. Also, do not edit
 `README.md`; all documentation should be in separate markdown files in the
 `docs/` folder.
+
+
+# Context7 MCP Server Integration
+
+You have access to the Context7 MCP server, which allows you to access
+up-to-date documentation for various libraries.
+
+The Context7 MCP Server provides these tools to the LLM:
+
+- `resolve-library-id`: Resolves a general library name into a Context7-compatible library ID.
+
+  Arguments:
+  - `libraryName` (optional): Search and rerank results
+
+- `get-library-docs`: Fetches documentation for a library using a Context7-compatible library ID.
+  
+  Arguments:
+  - `context7CompatibleLibraryID` (required)
+  - `topic` (optional): Focus the docs on a specific topic (e.g., "routing", "hooks")
+  - `tokens` (optional, default 5000): Max number of tokens to return
