@@ -134,8 +134,11 @@
 	// ---------------------------------------------------------------------------
 	let container: HTMLDivElement | undefined = $state(); // chart-area div (below controls bar)
 	let chartMount: HTMLDivElement | undefined = $state(); // inner absolute div uPlot renders into
+	// Plain let (not $state) — mutations must not feed back into Svelte's reactive
+	// graph, otherwise the chart-build $effect would re-run every time a new uPlot
+	// instance is assigned, which destroys the new chart and resets pan/zoom.
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let uplotInstance: any = $state(null);
+	let uplotInstance: any = null;
 
 	/** Returns the pixel dimensions available for the chart. */
 	function plotSize(): { width: number; height: number } {
@@ -161,14 +164,28 @@
 				yArrays[i].push(line[ys[i]] as number);
 			}
 		}
-		return [xs, ...yArrays];
+		// uPlot's closestIdx uses binary search and requires x values sorted ascending.
+		// Sort all arrays together by x to guarantee correct rendering of the full dataset.
+		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
+		const sortedXs = order.map((i) => xs[i]);
+		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
+		return [sortedXs, ...sortedYs];
 	}
 
 	// ---------------------------------------------------------------------------
 	// Zoom / pan helpers (operate on uPlot x scale)
 	// ---------------------------------------------------------------------------
-	function getXRange(u: { scales: { x: { min: number; max: number } } }): [number, number] {
-		return [u.scales.x.min, u.scales.x.max];
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	function getXRange(u: any): [number, number] {
+		const scaleMin = u.scales.x.min as number | null;
+		const scaleMax = u.scales.x.max as number | null;
+		if (scaleMin != null && scaleMax != null && isFinite(scaleMin) && isFinite(scaleMax)) {
+			return [scaleMin, scaleMax];
+		}
+		// Fall back to the full data extent when the scale hasn't been initialised yet
+		// or has been corrupted by a NaN setScale call.
+		const xData = u.data[0] as number[];
+		return [xData[0], xData[xData.length - 1]];
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -336,9 +353,13 @@
 
 			uplotInstance = new uPlot(opts, data, chartMount!);
 
-			// Immediately correct the size now that the DOM is settled
-			const { width, height } = plotSize();
-			uplotInstance.setSize({ width, height });
+			// Defer size correction to the next animation frame so the flexbox
+			// layout has been computed and clientWidth/clientHeight are non-zero.
+			requestAnimationFrame(() => {
+				if (cancelled || !uplotInstance) return;
+				const { width, height } = plotSize();
+				uplotInstance.setSize({ width, height });
+			});
 
 			// Attach zoom and pan to the uPlot overlay element
 			const plotEl = container!.querySelector('.u-over') as HTMLElement | null;
