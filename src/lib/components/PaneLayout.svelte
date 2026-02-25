@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
-	import type {
-		LayoutNode,
-		DropPosition,
-		PaneWidgetType,
-		GraphConfig,
-		GaugeConfig,
-		TableConfig
-	} from '$lib/types';
+	import type { LayoutNode, DropPosition, PaneWidgetType, GraphConfig } from '$lib/types';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import DropZone from '$lib/components/DropZone.svelte';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
@@ -16,15 +9,48 @@
 	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
 	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
 
+	import { dragState } from '$lib/dragState.svelte';
+
 	type Props = {
 		layout: LayoutNode;
 		onDrop: (nodeId: string, widgetType: PaneWidgetType, position: DropPosition) => void;
 		onRemove: (nodeId: string) => void;
 		onPopOut: (nodeId: string) => void;
 		onConfigChange: (nodeId: string, config: Record<string, unknown>) => void;
+		onMove?: (sourceId: string, nodeId: string, position: DropPosition) => void;
 	};
 
-	let { layout, onDrop, onRemove, onPopOut, onConfigChange }: Props = $props();
+	let { layout, onDrop, onRemove, onPopOut, onConfigChange, onMove }: Props = $props();
+
+	// Drag events for tile move
+	const canMove = typeof onMove === 'function';
+
+	function handleDragStart(event: DragEvent) {
+		if (!canMove) return;
+		event.dataTransfer?.setData('application/pane-id', layout.id);
+		event.dataTransfer!.effectAllowed = 'move';
+		dragState.draggingPaneId = layout.id;
+
+		// Create ghost
+		const target = event.target as HTMLElement;
+		if (target) {
+			const ghost = target.cloneNode(true) as HTMLElement;
+			ghost.style.position = 'absolute';
+			ghost.style.top = '-9999px';
+			ghost.style.left = '-9999px';
+			ghost.style.opacity = '0.6';
+			ghost.style.pointerEvents = 'none';
+			document.body.appendChild(ghost);
+			setTimeout(() => {
+				event.dataTransfer!.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2);
+				setTimeout(() => document.body.removeChild(ghost), 50);
+			}, 0);
+		}
+	}
+
+	function handleDragEnd(_event: DragEvent) {
+		dragState.draggingPaneId = null;
+	}
 
 	const WIDGET_LABELS: Record<PaneWidgetType, string> = {
 		graph: 'Graph',
@@ -43,7 +69,7 @@
 		{#each layout.panes ?? [] as child, i (child.id)}
 			<Pane defaultSize={child.defaultSize ?? 50} minSize={child.minSize ?? 5}>
 				<!-- Recurse -->
-				<PaneLayout layout={child} {onDrop} {onRemove} {onPopOut} {onConfigChange} />
+				<PaneLayout layout={child} {onDrop} {onRemove} {onPopOut} {onConfigChange} {onMove} />
 			</Pane>
 			{#if i < (layout.panes?.length ?? 0) - 1}
 				<PaneResizer
@@ -60,6 +86,9 @@
 		<!-- Title bar -->
 		<div
 			class="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-100 px-2 py-0.5"
+			draggable={canMove}
+			ondragstart={handleDragStart}
+			ondragend={handleDragEnd}
 		>
 			<span class="flex-1 text-xs font-medium text-stone-600">
 				{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
@@ -82,7 +111,7 @@
 
 		<!-- Widget content wrapped in a drop zone -->
 		<div class="min-h-0 flex-1 overflow-hidden">
-			<DropZone nodeId={layout.id} {onDrop}>
+			<DropZone nodeId={layout.id} {onDrop} {onMove}>
 				{#if layout.type === 'graph'}
 					<GraphWidget
 						config={layout.config as GraphConfig | undefined}
@@ -92,12 +121,12 @@
 					<MapWidget />
 				{:else if layout.type === 'table'}
 					<TableWidget
-						config={layout.config as TableConfig | undefined}
+						config={layout.config as any}
 						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
 					/>
 				{:else if layout.type === 'gauge'}
 					<GaugeWidget
-						config={layout.config as GaugeConfig | undefined}
+						config={layout.config as any}
 						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
 					/>
 				{:else if layout.type === 'load-data'}

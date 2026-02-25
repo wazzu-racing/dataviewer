@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import type { LayoutNode, FloatingPaneState, PaneWidgetType, DropPosition } from '$lib/types';
-	import { ensureIds, insertPane, removePane, findNode, updateConfig } from '$lib/layoutUtils';
+	import {
+		ensureIds,
+		insertPane,
+		removePane,
+		findNode,
+		updateConfig,
+		movePane,
+		swapPanes
+	} from '$lib/layoutUtils';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
@@ -165,6 +173,18 @@
 	function handleFloatConfigChange(id: string, config: Record<string, unknown>) {
 		floatingPanes = floatingPanes.map((p) => (p.id === id ? { ...p, config } : p));
 	}
+
+	// --- Handle pane moves / swaps ---
+	function handleMove(sourceId: string, targetId: string, position: DropPosition) {
+		if (sourceId === targetId) return;
+		let updated: LayoutNode | null;
+		if (position === 'center') {
+			updated = swapPanes(layout, sourceId, targetId);
+		} else {
+			updated = movePane(layout, sourceId, targetId, position);
+		}
+		layout = updated ? ensureIds(updated) : workingLayout();
+	}
 </script>
 
 <div class="flex h-screen w-full overflow-hidden bg-stone-100">
@@ -179,6 +199,7 @@
 			onRemove={handleRemove}
 			onPopOut={handlePopOut}
 			onConfigChange={handleLayoutConfigChange}
+			onMove={handleMove}
 		/>
 
 		<!-- Floating panes rendered on top -->

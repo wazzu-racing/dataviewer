@@ -4,10 +4,11 @@
 	type Props = {
 		nodeId: string;
 		onDrop: (nodeId: string, widgetType: PaneWidgetType, position: DropPosition) => void;
+		onMove?: (sourceId: string, nodeId: string, position: DropPosition) => void;
 		children?: import('svelte').Snippet;
 	};
 
-	let { nodeId, onDrop, children }: Props = $props();
+	let { nodeId, onDrop, onMove, children }: Props = $props();
 
 	let isDraggingOver = $state(false);
 	let dropPosition: DropPosition | null = $state(null);
@@ -37,10 +38,19 @@
 		return event.dataTransfer?.types.includes('application/pane-type') ?? false;
 	}
 
+	function isDraggingPaneId(event: DragEvent): boolean {
+		return event.dataTransfer?.types.includes('application/pane-id') ?? false;
+	}
+
+	function allowsDnD(event: DragEvent): boolean {
+		return isDraggingPaneType(event) || isDraggingPaneId(event);
+	}
+
 	function handleDragOver(event: DragEvent) {
-		if (!isDraggingPaneType(event)) return;
+		if (!allowsDnD(event)) return;
 		event.preventDefault();
-		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+		if (event.dataTransfer)
+			event.dataTransfer.dropEffect = isDraggingPaneType(event) ? 'copy' : 'move';
 		isDraggingOver = true;
 		dropPosition = getDropPosition(event, event.currentTarget as HTMLElement);
 	}
@@ -58,12 +68,20 @@
 	function handleDrop(event: DragEvent) {
 		event.preventDefault();
 		isDraggingOver = false;
+		const movePaneId = event.dataTransfer?.getData('application/pane-id') as string | undefined;
 		const widgetType = event.dataTransfer?.getData('application/pane-type') as
 			| PaneWidgetType
 			| undefined;
-		if (!widgetType || !dropPosition) return;
-		onDrop(nodeId, widgetType, dropPosition);
-		dropPosition = null;
+		if (!dropPosition) return;
+		if (movePaneId && onMove && movePaneId !== nodeId) {
+			onMove(movePaneId, nodeId, dropPosition);
+			dropPosition = null;
+			return;
+		}
+		if (widgetType) {
+			onDrop(nodeId, widgetType, dropPosition);
+			dropPosition = null;
+		}
 	}
 </script>
 
