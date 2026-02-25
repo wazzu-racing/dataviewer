@@ -169,6 +169,8 @@ export function removePane(root: LayoutNode, targetId: string): LayoutNode | nul
 /**
  * Update the config of a node by id.
  * Returns a new tree with the config updated; does nothing if node not found.
+ * Preserves reference identity for unchanged subtrees to avoid spurious
+ * Svelte re-renders of unrelated panes.
  */
 export function updateConfig(
 	root: LayoutNode,
@@ -179,10 +181,10 @@ export function updateConfig(
 		return { ...root, config };
 	}
 	if (!root.panes) return root;
-	return {
-		...root,
-		panes: root.panes.map((child) => updateConfig(child, targetId, config))
-	};
+	const newPanes = root.panes.map((child) => updateConfig(child, targetId, config));
+	// If every child returned the same reference, nothing changed — return root as-is.
+	if (newPanes.every((p, i) => p === root.panes![i])) return root;
+	return { ...root, panes: newPanes };
 }
 
 function _removeNode(node: LayoutNode, targetId: string): void {

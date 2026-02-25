@@ -2,7 +2,7 @@
 	import { data as globalData } from '$lib/data.svelte';
 	import type { DataLine, GraphConfig, XDisplayMode } from '$lib/types';
 	import { browser } from '$app/environment';
-	import { untrack } from 'svelte';
+	import { untrack } from 'svelte'; // still used by the xDisplayMode reset effect below
 	import 'uplot/dist/uPlot.min.css';
 	import { isTimeField, formatRelative, formatAbsolute } from '$lib/timeFormat';
 
@@ -106,16 +106,31 @@
 	let yFields: NumericField[] = $state([..._seedY]);
 	let xDisplayMode: XDisplayMode = $state(_seedDisplayMode);
 
-	// Reset display mode to 'raw' when the user switches to a non-time field.
-	// Use untrack() so writing xDisplayMode here does not trigger the config
-	// persistence effect (which also reads xDisplayMode), preventing a
-	// effect_update_depth_exceeded loop.
+	// Reset display mode to 'raw' when the user switches to a non-time field,
+	// and notify the parent of the combined change (new xField + reset xDisplayMode).
+	//
+	// This effect is also the sole notifier for xField changes — the X select's
+	// onchange does NOT call notifyConfigChange directly, because doing so would
+	// fire a first notification with the stale xDisplayMode before this effect
+	// has a chance to reset it to 'raw'.
+	//
+	// Mount guard: skip the very first run so that initialising with a non-time
+	// xField (e.g. a saved config with xField='rpm') does not fire onConfigChange
+	// during mount, which would trigger a parent re-render before the widget is
+	// fully set up.
+	let _xEffectMounted = false;
 	$effect(() => {
-		if (!isTimeField(xField)) {
-			untrack(() => {
-				xDisplayMode = 'raw';
-			});
+		const currentX = xField; // tracked dependency
+		if (!_xEffectMounted) {
+			_xEffectMounted = true;
+			return;
 		}
+		untrack(() => {
+			if (!isTimeField(currentX)) {
+				xDisplayMode = 'raw';
+			}
+			notifyConfigChange();
+		});
 	});
 
 	// Dropdown open state
@@ -126,9 +141,11 @@
 			// Don't remove the last field
 			if (yFields.length > 1) {
 				yFields = yFields.filter((f) => f !== field);
+				notifyConfigChange();
 			}
 		} else {
 			yFields = [...yFields, field];
+			notifyConfigChange();
 		}
 	}
 
@@ -446,20 +463,16 @@
 	});
 
 	// ---------------------------------------------------------------------------
-	// Config persistence — notify parent only when user changes selection,
-	// not on initial mount (which would cause an effect_update_depth_exceeded loop
-	// because the parent re-renders the widget with the new config prop).
+	// Config persistence helper — called directly from user-interaction handlers
+	// so that config is only propagated upward in response to explicit user
+	// actions, never as a side-effect of receiving new props from the parent.
+	// This avoids the effect_update_depth_exceeded reactive cycle that occurs
+	// when an $effect calls onConfigChange → parent updates layout → parent
+	// re-renders widget with new config prop → effect re-runs → repeat.
 	// ---------------------------------------------------------------------------
-	let _configMounted = false;
-	$effect(() => {
-		// Read reactive deps first so Svelte tracks them
-		const cfg: GraphConfig = { xField, yFields: [...yFields], xDisplayMode };
-		if (!_configMounted) {
-			_configMounted = true;
-			return;
-		}
-		onConfigChange?.(cfg);
-	});
+	function notifyConfigChange() {
+		onConfigChange?.({ xField, yFields: [...yFields], xDisplayMode });
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -484,6 +497,7 @@
 			<label class="flex items-center gap-1 text-xs text-stone-600">
 				<select
 					bind:value={xDisplayMode}
+					onchange={notifyConfigChange}
 					class="rounded border border-stone-300 bg-white px-1 py-0.5 text-xs"
 				>
 					<option value="raw">Raw</option>
