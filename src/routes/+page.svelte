@@ -17,16 +17,62 @@
 		return ensureIds({ id: '', type: 'graph' });
 	}
 
+	function loadSavedLayout(): LayoutNode {
+		if (!browser) return defaultLayout();
+		try {
+			const raw = localStorage.getItem('layout');
+			if (!raw) return defaultLayout();
+			const parsed = JSON.parse(raw) as LayoutNode;
+			return ensureIds(parsed);
+		} catch {
+			return defaultLayout();
+		}
+	}
+
+	const VALID_WIDGET_TYPES = new Set<string>(['graph', 'map', 'table', 'gauge', 'load-data']);
+
+	function isValidFloatingPane(p: unknown): p is FloatingPaneState {
+		if (typeof p !== 'object' || p === null) return false;
+		const o = p as Record<string, unknown>;
+		return (
+			typeof o.id === 'string' &&
+			typeof o.type === 'string' &&
+			VALID_WIDGET_TYPES.has(o.type) &&
+			typeof o.x === 'number' &&
+			typeof o.y === 'number' &&
+			typeof o.width === 'number' &&
+			typeof o.height === 'number' &&
+			typeof o.zIndex === 'number'
+		);
+	}
+
+	function loadSavedFloatingPanes(): FloatingPaneState[] {
+		if (!browser) return [];
+		try {
+			const raw = localStorage.getItem('floating-panes');
+			if (!raw) return [];
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter(isValidFloatingPane);
+		} catch {
+			return [];
+		}
+	}
+
 	// ---------------------------------------------------------------------------
-	// State
+	// State — seeded from localStorage on mount
 	// ---------------------------------------------------------------------------
-	let layout: LayoutNode = $state(defaultLayout());
-	let floatingPanes: FloatingPaneState[] = $state([]);
+	let layout: LayoutNode = $state(loadSavedLayout());
+	let floatingPanes: FloatingPaneState[] = $state(loadSavedFloatingPanes());
 	let topZ = $state(200);
 
 	// ---------------------------------------------------------------------------
-	// Persist floating pane positions on change
+	// Persist layout and floating pane positions on change
 	// ---------------------------------------------------------------------------
+	$effect(() => {
+		if (browser) localStorage.setItem('layout', JSON.stringify(layout));
+	});
+
 	$effect(() => {
 		if (browser) localStorage.setItem('floating-panes', JSON.stringify(floatingPanes));
 	});

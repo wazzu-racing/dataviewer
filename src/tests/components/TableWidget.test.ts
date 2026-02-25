@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import TableWidget from '$lib/components/widgets/TableWidget.svelte';
 import { data as globalData } from '$lib/data.svelte';
-import type { DataLine } from '$lib/types';
+import type { DataLine, TableConfig } from '$lib/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -161,5 +161,55 @@ describe('TableWidget', () => {
 		const headers = container.querySelectorAll('div.font-semibold.text-stone-700');
 		const headerTexts = Array.from(headers).map((h) => h.textContent?.trim());
 		expect(headerTexts).not.toContain('time');
+	});
+
+	// ---------------------------------------------------------------------------
+	// Config persistence
+	// ---------------------------------------------------------------------------
+
+	it('seeds visibleColumns from config.visibleColumns prop', () => {
+		const config: TableConfig = { visibleColumns: ['rpm', 'tps'] };
+		globalData.lines = [makeDataLine({ rpm: 3000, tps: 50 })];
+		const { container } = render(TableWidget, { props: { config } });
+		const headers = container.querySelectorAll('div.font-semibold.text-stone-700');
+		const headerTexts = Array.from(headers).map((h) => h.textContent?.trim());
+		expect(headerTexts).toContain('rpm');
+		expect(headerTexts).toContain('tps');
+		// Should not contain default columns that weren't in config
+		expect(headerTexts).not.toContain('afr');
+		expect(headerTexts).not.toContain('batt');
+	});
+
+	it('does not fire onConfigChange on initial mount', async () => {
+		const onConfigChange = vi.fn();
+		render(TableWidget, { props: { onConfigChange } });
+		await waitFor(() => {});
+		expect(onConfigChange).not.toHaveBeenCalled();
+	});
+
+	it('fires onConfigChange when a column is toggled', async () => {
+		const onConfigChange = vi.fn();
+		const { getByText, container } = render(TableWidget, { props: { onConfigChange } });
+
+		await fireEvent.click(getByText(/Columns/));
+
+		// Toggle 'afr' off (it's a default column)
+		const checkboxes = container.querySelectorAll(
+			'input[type="checkbox"]'
+		) as NodeListOf<HTMLInputElement>;
+		let afrCheckbox: HTMLInputElement | undefined;
+		checkboxes.forEach((cb) => {
+			if (cb.closest('label')?.textContent?.trim() === 'afr') {
+				afrCheckbox = cb;
+			}
+		});
+		expect(afrCheckbox).toBeTruthy();
+		await fireEvent.click(afrCheckbox!);
+
+		await waitFor(() => {
+			expect(onConfigChange).toHaveBeenCalled();
+		});
+		const cfg = onConfigChange.mock.calls[0][0] as TableConfig;
+		expect(cfg.visibleColumns).not.toContain('afr');
 	});
 });

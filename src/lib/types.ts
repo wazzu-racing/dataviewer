@@ -58,10 +58,24 @@ export const NUM_FIELDS = 48;
 // Widget configuration types
 // ---------------------------------------------------------------------------
 
+/** How the x-axis is labelled when a time-based field is selected */
+export type XDisplayMode = 'raw' | 'relative' | 'absolute';
+
 /** Per-pane configuration for the Graph widget */
 export type GraphConfig = {
 	xField: string; // e.g. 'time'
 	yFields: string[]; // e.g. ['rpm', 'tps']
+	xDisplayMode?: XDisplayMode; // how x-axis labels are formatted for time fields
+};
+
+/** Per-pane configuration for the Gauge widget */
+export type GaugeConfig = {
+	field: string; // e.g. 'rpm'
+};
+
+/** Per-pane configuration for the Table widget */
+export type TableConfig = {
+	visibleColumns: string[]; // e.g. ['time', 'rpm', 'tps']
 };
 
 // ---------------------------------------------------------------------------

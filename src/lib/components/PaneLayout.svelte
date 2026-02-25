@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
-	import type { LayoutNode, DropPosition, PaneWidgetType, GraphConfig } from '$lib/types';
+	import type {
+		LayoutNode,
+		DropPosition,
+		PaneWidgetType,
+		GraphConfig,
+		GaugeConfig,
+		TableConfig
+	} from '$lib/types';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import DropZone from '$lib/components/DropZone.svelte';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
@@ -84,9 +91,15 @@
 				{:else if layout.type === 'map'}
 					<MapWidget />
 				{:else if layout.type === 'table'}
-					<TableWidget />
+					<TableWidget
+						config={layout.config as TableConfig | undefined}
+						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
+					/>
 				{:else if layout.type === 'gauge'}
-					<GaugeWidget />
+					<GaugeWidget
+						config={layout.config as GaugeConfig | undefined}
+						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
+					/>
 				{:else if layout.type === 'load-data'}
 					<LoadDataWidget onDismiss={() => onRemove(layout.id)} />
 				{:else}

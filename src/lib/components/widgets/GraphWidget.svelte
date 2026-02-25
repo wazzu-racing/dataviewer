@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { data as globalData } from '$lib/data.svelte';
-	import type { DataLine, GraphConfig } from '$lib/types';
+	import type { DataLine, GraphConfig, XDisplayMode } from '$lib/types';
 	import { browser } from '$app/environment';
 	import { untrack } from 'svelte';
 	import 'uplot/dist/uPlot.min.css';
+	import { isTimeField, formatRelative, formatAbsolute } from '$lib/timeFormat';
 
 	// ---------------------------------------------------------------------------
 	// All numeric (plottable) keys from DataLine — excludes 'unixtime' (Date)
@@ -96,12 +97,26 @@
 			? (_cfg!.yFields as NumericField[])
 			: ['rpm']
 	);
+	const _seedDisplayMode: XDisplayMode = untrack(() => _cfg?.xDisplayMode ?? 'raw');
 
 	// ---------------------------------------------------------------------------
 	// Widget state — seeded once from persisted config
 	// ---------------------------------------------------------------------------
 	let xField: NumericField = $state(_seedX);
 	let yFields: NumericField[] = $state([..._seedY]);
+	let xDisplayMode: XDisplayMode = $state(_seedDisplayMode);
+
+	// Reset display mode to 'raw' when the user switches to a non-time field.
+	// Use untrack() so writing xDisplayMode here does not trigger the config
+	// persistence effect (which also reads xDisplayMode), preventing a
+	// effect_update_depth_exceeded loop.
+	$effect(() => {
+		if (!isTimeField(xField)) {
+			untrack(() => {
+				xDisplayMode = 'raw';
+			});
+		}
+	});
 
 	// Dropdown open state
 	let yDropdownOpen = $state(false);
@@ -151,15 +166,19 @@
 	// ---------------------------------------------------------------------------
 	// Data builder
 	// ---------------------------------------------------------------------------
-	function buildData(
-		lines: DataLine[],
-		x: NumericField,
-		ys: NumericField[]
-	): [number[], ...number[][]] {
+	type BuiltData = {
+		data: [number[], ...number[][]];
+		epochDate: Date; // unixtime of the earliest row (by xField)
+		firstMs: number; // xField value of that same earliest row
+	};
+
+	function buildData(lines: DataLine[], x: NumericField, ys: NumericField[]): BuiltData {
 		const xs: number[] = [];
 		const yArrays: number[][] = ys.map(() => []);
+		const unixtimes: Date[] = [];
 		for (const line of lines) {
 			xs.push(line[x] as number);
+			unixtimes.push(line.unixtime);
 			for (let i = 0; i < ys.length; i++) {
 				yArrays[i].push(line[ys[i]] as number);
 			}
@@ -169,7 +188,13 @@
 		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
 		const sortedXs = order.map((i) => xs[i]);
 		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
-		return [sortedXs, ...sortedYs];
+		// The first element after sorting is the earliest row — use its unixtime as the epoch.
+		const firstIdx = order[0];
+		return {
+			data: [sortedXs, ...sortedYs],
+			epochDate: unixtimes[firstIdx] ?? new Date(0),
+			firstMs: sortedXs[0] ?? 0
+		};
 	}
 
 	// ---------------------------------------------------------------------------
@@ -259,6 +284,7 @@
 		const lines = globalData.lines;
 		const x = xField;
 		const ys = yFields;
+		const displayMode = xDisplayMode;
 
 		// Guard against stale async callbacks if the effect re-runs before the
 		// dynamic import resolves (e.g. user changes a field quickly).
@@ -276,7 +302,14 @@
 
 			if (lines.length === 0 || !chartMount) return;
 
-			const data = buildData(lines, x, ys);
+			const { data: chartData, epochDate, firstMs } = buildData(lines, x, ys);
+
+			// Helper: format an x value for the current display mode
+			const formatXValue = (val: number): string => {
+				if (displayMode === 'relative') return formatRelative(val - firstMs);
+				if (displayMode === 'absolute') return formatAbsolute(val, epochDate, firstMs);
+				return val.toFixed(3);
+			};
 
 			// Build series config — first entry is x-axis (no style needed)
 			const series: uPlot.Series[] = [{ label: prettyLabel(x) }];
@@ -296,7 +329,19 @@
 			}
 
 			// Show at most 2 Y axes (left + right) to avoid clutter
-			const axes: uPlot.Axis[] = [{ label: prettyLabel(x) }];
+			const xAxis: uPlot.Axis = { label: prettyLabel(x) };
+			if (displayMode !== 'raw') {
+				// Custom tick-label formatter for time display modes.
+				// uPlot calls values(u, splits, axisIdx, foundSpace, foundIncr) → (string | number | null)[]
+				// splits may contain null for suppressed ticks — return "" for those.
+				xAxis.values = (_u, splits) =>
+					splits.map((t) => {
+						if (t == null) return '';
+						if (displayMode === 'relative') return formatRelative(t - firstMs);
+						return formatAbsolute(t, epochDate, firstMs);
+					});
+			}
+			const axes: uPlot.Axis[] = [xAxis];
 			for (let i = 0; i < ys.length; i++) {
 				axes.push({
 					scale: `y${i}`,
@@ -336,7 +381,7 @@
 
 							const xVal = (u.data[0] as number[])[idx];
 							tooltipXLabel = prettyLabel(x);
-							tooltipXValue = xVal != null ? xVal.toFixed(3) : '—';
+							tooltipXValue = xVal != null ? formatXValue(xVal) : '—';
 
 							tooltipEntries = ys.map((field, i) => {
 								const val = (u.data[i + 1] as number[])[idx!];
@@ -351,7 +396,7 @@
 				}
 			};
 
-			uplotInstance = new uPlot(opts, data, chartMount!);
+			uplotInstance = new uPlot(opts, chartData, chartMount!);
 
 			// Defer size correction to the next animation frame so the flexbox
 			// layout has been computed and clientWidth/clientHeight are non-zero.
@@ -408,7 +453,7 @@
 	let _configMounted = false;
 	$effect(() => {
 		// Read reactive deps first so Svelte tracks them
-		const cfg: GraphConfig = { xField, yFields: [...yFields] };
+		const cfg: GraphConfig = { xField, yFields: [...yFields], xDisplayMode };
 		if (!_configMounted) {
 			_configMounted = true;
 			return;
@@ -433,6 +478,20 @@
 				{/each}
 			</select>
 		</label>
+
+		<!-- Timestamp display mode toggle — only shown for time-based x fields -->
+		{#if isTimeField(xField)}
+			<label class="flex items-center gap-1 text-xs text-stone-600">
+				<select
+					bind:value={xDisplayMode}
+					class="rounded border border-stone-300 bg-white px-1 py-0.5 text-xs"
+				>
+					<option value="raw">Raw</option>
+					<option value="relative">Relative</option>
+					<option value="absolute">Absolute</option>
+				</select>
+			</label>
+		{/if}
 
 		<!-- Y series multi-select dropdown -->
 		<div class="relative flex items-center gap-1 text-xs text-stone-600">

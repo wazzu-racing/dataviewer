@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { draggable } from '@neodrag/svelte';
-	import type { FloatingPaneState, PaneWidgetType, GraphConfig } from '$lib/types';
+	import type {
+		FloatingPaneState,
+		PaneWidgetType,
+		GraphConfig,
+		GaugeConfig,
+		TableConfig
+	} from '$lib/types';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
 	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
@@ -76,9 +82,15 @@
 		{:else if pane.type === 'map'}
 			<MapWidget />
 		{:else if pane.type === 'table'}
-			<TableWidget />
+			<TableWidget
+				config={pane.config as TableConfig | undefined}
+				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
+			/>
 		{:else if pane.type === 'gauge'}
-			<GaugeWidget />
+			<GaugeWidget
+				config={pane.config as GaugeConfig | undefined}
+				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
+			/>
 		{:else if pane.type === 'load-data'}
 			<LoadDataWidget />
 		{/if}

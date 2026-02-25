@@ -6,9 +6,11 @@
 	let { onDismiss }: { onDismiss?: () => void } = $props();
 
 	let files: FileList | undefined = $state();
+	let parseError: string | null = $state(null);
 
 	async function parse() {
 		if (!files || files.length === 0) return;
+		parseError = null;
 		const f = files[0];
 		const buffer = await f.arrayBuffer();
 		const dataview = new DataView(buffer);
@@ -25,7 +27,7 @@
 					row.push(dataview.getInt32(row_i * bytesPerRow + 4 * i, true)); // little-endian
 				}
 			} catch {
-				alert('Error: corrupted data at row ' + row_i);
+				parseError = `Corrupted data at row ${row_i} — file may be truncated or malformed.`;
 				return;
 			}
 			rawRows.push(row);
@@ -48,6 +50,10 @@
 		accept=".bin"
 		class="text-sm text-stone-500 file:mr-3 file:cursor-pointer file:rounded file:border file:border-stone-300 file:bg-stone-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-stone-700 hover:file:bg-blue-50 hover:file:text-blue-700"
 	/>
+
+	{#if parseError}
+		<p class="max-w-xs text-center text-sm text-red-600">{parseError}</p>
+	{/if}
 
 	{#if globalData.lines.length > 0}
 		<p class="text-sm text-emerald-600">

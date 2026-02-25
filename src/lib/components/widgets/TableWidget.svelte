@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { data as globalData } from '$lib/data.svelte';
-	import type { DataLine } from '$lib/types';
+	import type { DataLine, TableConfig } from '$lib/types';
 
 	// All displayable columns (everything except unixtime)
 	const ALL_COLUMNS = [
@@ -55,9 +56,35 @@
 
 	type Column = (typeof ALL_COLUMNS)[number];
 
+	// ---------------------------------------------------------------------------
+	// Props
+	// ---------------------------------------------------------------------------
+	type Props = {
+		config?: TableConfig;
+		onConfigChange?: (cfg: TableConfig) => void;
+	};
+	const { config: _cfg, onConfigChange }: Props = $props();
+	const _seedColumns: Column[] = untrack(() => {
+		const saved = _cfg?.visibleColumns as Column[] | undefined;
+		return saved?.length ? saved : ['time', 'rpm', 'ground_speed', 'tps', 'afr', 'batt'];
+	});
+
 	// Default visible columns
-	let visibleColumns: Column[] = $state(['time', 'rpm', 'ground_speed', 'tps', 'afr', 'batt']);
+	let visibleColumns: Column[] = $state([..._seedColumns]);
 	let showColumnPicker = $state(false);
+
+	// ---------------------------------------------------------------------------
+	// Config persistence — notify parent only after initial mount
+	// ---------------------------------------------------------------------------
+	let _configMounted = false;
+	$effect(() => {
+		const cfg: TableConfig = { visibleColumns: [...visibleColumns] };
+		if (!_configMounted) {
+			_configMounted = true;
+			return;
+		}
+		onConfigChange?.(cfg);
+	});
 
 	// Windowed rendering — only render rows within scroll viewport
 	const ROW_HEIGHT = 28; // px

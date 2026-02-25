@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
 import { data as globalData } from '$lib/data.svelte';
-import type { DataLine } from '$lib/types';
+import type { DataLine, GaugeConfig } from '$lib/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,9 +100,10 @@ describe('GaugeWidget', () => {
 		const select = container.querySelector('select')!;
 		// Ensure 'rpm' is selected
 		expect((select as HTMLSelectElement).value).toBe('rpm');
-		// The large value display is in the text-5xl div
-		const bigValue = container.querySelector('.text-5xl');
-		expect(bigValue?.textContent?.trim()).toBe('7200.0');
+		// The large value display is in the SVG text element
+		const svgTexts = container.querySelectorAll('svg text');
+		const valueText = Array.from(svgTexts).find((t) => t.textContent?.trim() === '7200.0');
+		expect(valueText).toBeTruthy();
 	});
 
 	it('displays the unit label for the selected field', () => {
@@ -111,29 +112,35 @@ describe('GaugeWidget', () => {
 		expect(getByText('RPM')).toBeTruthy();
 	});
 
-	it('renders the min/max bar when data is loaded', () => {
-		globalData.lines = [makeDataLine({ rpm: 1000 }), makeDataLine({ rpm: 5000 })];
+	it('renders an SVG arc gauge when data is loaded', () => {
+		// Two rows with different rpm values so barPct > 0 and the fill arc is rendered
+		globalData.lines = [makeDataLine({ rpm: 0 }), makeDataLine({ rpm: 5000 })];
 		const { container } = render(GaugeWidget);
-		const bar = container.querySelector('.bg-blue-500');
-		expect(bar).toBeTruthy();
+		const svg = container.querySelector('svg');
+		expect(svg).toBeTruthy();
+		// Should have at least two path elements (track + fill)
+		const paths = svg!.querySelectorAll('path');
+		expect(paths.length).toBeGreaterThanOrEqual(2);
 	});
 
-	it('shows min value of 0 and max value of the highest rpm', () => {
+	it('shows min value and max value as SVG text labels', () => {
 		globalData.lines = [makeDataLine({ rpm: 0 }), makeDataLine({ rpm: 8000 })];
 		const { container } = render(GaugeWidget);
-		// Min/max are shown in the .flex.justify-between span elements
-		const spans = container.querySelectorAll('.flex.justify-between span');
-		const texts = Array.from(spans).map((s) => s.textContent?.trim());
-		expect(texts).toContain('0.0');
-		expect(texts).toContain('8000.0');
+		const svgTexts = Array.from(container.querySelectorAll('svg text')).map((t) =>
+			t.textContent?.trim()
+		);
+		expect(svgTexts).toContain('0.0');
+		expect(svgTexts).toContain('8000.0');
 	});
 
-	it('renders the field label below the value', () => {
+	it('renders the field label in the SVG', () => {
 		globalData.lines = [makeDataLine({ rpm: 4000 })];
 		const { container } = render(GaugeWidget);
-		// prettyLabel('rpm') → 'Rpm' — shown in the .text-sm.font-medium div below the value
-		const label = container.querySelector('.text-sm.font-medium');
-		expect(label?.textContent?.trim()).toBe('Rpm');
+		// prettyLabel('rpm') → 'Rpm'
+		const svgTexts = Array.from(container.querySelectorAll('svg text')).map((t) =>
+			t.textContent?.trim()
+		);
+		expect(svgTexts).toContain('Rpm');
 	});
 
 	it('updates displayed value when a different field is selected', async () => {
@@ -143,7 +150,41 @@ describe('GaugeWidget', () => {
 		const select = container.querySelector('select') as HTMLSelectElement;
 		await fireEvent.change(select, { target: { value: 'tps' } });
 
-		const bigValue = container.querySelector('.text-5xl');
-		expect(bigValue?.textContent?.trim()).toBe('75.0');
+		const svgTexts = Array.from(container.querySelectorAll('svg text')).map((t) =>
+			t.textContent?.trim()
+		);
+		expect(svgTexts).toContain('75.0');
+	});
+
+	// ---------------------------------------------------------------------------
+	// Config persistence
+	// ---------------------------------------------------------------------------
+
+	it('seeds selectedField from config.field prop', () => {
+		const config: GaugeConfig = { field: 'tps' };
+		const { container } = render(GaugeWidget, { props: { config } });
+		const select = container.querySelector('select') as HTMLSelectElement;
+		expect(select.value).toBe('tps');
+	});
+
+	it('does not fire onConfigChange on initial mount', async () => {
+		const onConfigChange = vi.fn();
+		render(GaugeWidget, { props: { onConfigChange } });
+		await waitFor(() => {});
+		expect(onConfigChange).not.toHaveBeenCalled();
+	});
+
+	it('fires onConfigChange when a different field is selected', async () => {
+		const onConfigChange = vi.fn();
+		const { container } = render(GaugeWidget, { props: { onConfigChange } });
+
+		const select = container.querySelector('select') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'tps' } });
+
+		await waitFor(() => {
+			expect(onConfigChange).toHaveBeenCalled();
+		});
+		const cfg = onConfigChange.mock.calls[0][0] as GaugeConfig;
+		expect(cfg.field).toBe('tps');
 	});
 });
