@@ -171,6 +171,9 @@
 	// instance is assigned, which destroys the new chart and resets pan/zoom.
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let uplotInstance: any = null;
+	// Holds user-set y-zoom ranges keyed by scale name. Hoisted so resetView()
+	// and the button handler can clear it without being inside the $effect.
+	const manualYRanges = new Map<string, [number, number]>();
 
 	/** Returns the pixel dimensions available for the chart. */
 	function plotSize(): { width: number; height: number } {
@@ -409,14 +412,27 @@
 		};
 	}
 
-	// Double-click on the plot area resets all manual y-zoom, restoring auto-fit.
-	// Suppressed when the double-click is the tail end of a drag (displacement > 4px).
-	function attachDoubleClickReset(
+	// Resets all manual y-zoom and x-zoom, restoring the full auto-fit view.
+	// Safe to call at any time; no-ops if no plot is mounted yet.
+	function resetView() {
+		if (!uplotInstance) return;
+		manualYRanges.clear();
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		u: any,
-		el: HTMLElement,
-		manualYRanges: Map<string, [number, number]>
-	) {
+		const xData: any[] = uplotInstance.data[0];
+		if (xData && xData.length > 0) {
+			// setScale triggers uPlot's full redraw pipeline (including the y range
+			// callbacks), so we do NOT call redraw() separately — that would
+			// overwrite the scale we just set.
+			uplotInstance.setScale('x', { min: xData[0], max: xData[xData.length - 1] });
+		} else {
+			// No x data — just redraw so Y auto-fit kicks in via the range callbacks.
+			uplotInstance.redraw();
+		}
+	}
+
+	// Double-click on the plot area resets the view (both axes).
+	// Suppressed when the double-click is the tail end of a drag (displacement > 4px).
+	function attachDoubleClickReset(el: HTMLElement) {
 		let downX = 0;
 		let downY = 0;
 		function onMouseDown(e: MouseEvent) {
@@ -427,8 +443,7 @@
 			const dx = e.clientX - downX;
 			const dy = e.clientY - downY;
 			if (dx * dx + dy * dy > 16) return; // suppress if drag > 4px
-			manualYRanges.clear();
-			u.redraw();
+			resetView();
 		}
 		el.addEventListener('mousedown', onMouseDown);
 		el.addEventListener('dblclick', onDblClick);
@@ -487,11 +502,11 @@
 			}
 
 			// Independent scale per Y series.
-			// manualYRanges holds user-set y-zoom ranges keyed by scale name.
-			// When populated, the range function returns the locked bounds instead of
-			// letting uPlot auto-fit, which prevents panning the x-axis from resetting
-			// a y-zoom the user has already applied.
-			const manualYRanges = new Map<string, [number, number]>();
+			// manualYRanges (hoisted to module scope) holds user-set y-zoom ranges
+			// keyed by scale name. When populated, the range function returns the
+			// locked bounds instead of letting uPlot auto-fit, which prevents panning
+			// the x-axis from resetting a y-zoom the user has already applied.
+			manualYRanges.clear(); // reset on each chart rebuild
 			const scales: Record<string, uPlot.Scale> = { x: { time: false } };
 			for (let i = 0; i < ys.length; i++) {
 				const key = `y${i}`;
@@ -594,7 +609,7 @@
 			if (wrapEl && overEl) {
 				const detachWheel = attachWheelZoom(uplotInstance, wrapEl, manualYRanges);
 				const detachPan = attachPan(uplotInstance, overEl, manualYRanges);
-				const detachDblClick = attachDoubleClickReset(uplotInstance, overEl, manualYRanges);
+				const detachDblClick = attachDoubleClickReset(overEl);
 				// Stash cleanup on the instance for teardown
 				uplotInstance._detachInteractions = () => {
 					detachWheel();
@@ -723,11 +738,18 @@
 			</div>
 		</div>
 
-		{#if globalData.lines.length > 0}
-			<span class="ml-auto text-xs text-stone-400"
-				>{globalData.lines.length.toLocaleString()} pts</span
-			>
-		{/if}
+		<div class="ml-auto flex items-center gap-2">
+			{#if globalData.lines.length > 0}
+				<span class="text-xs text-stone-400">{globalData.lines.length.toLocaleString()} pts</span>
+				<button
+					onclick={resetView}
+					class="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-600 hover:bg-stone-50 active:bg-stone-100"
+					title="Reset view (also double-click on chart)"
+				>
+					Reset view
+				</button>
+			{/if}
+		</div>
 	</div>
 
 	<!-- uPlot mount point + tooltip overlay -->
