@@ -88,7 +88,7 @@
 				{:else if layout.type === 'gauge'}
 					<GaugeWidget />
 				{:else if layout.type === 'load-data'}
-					<LoadDataWidget />
+					<LoadDataWidget onDismiss={() => onRemove(layout.id)} />
 				{:else}
 					<div class="flex h-full items-center justify-center text-sm text-stone-400">
 						Unknown widget type: {layout.type}

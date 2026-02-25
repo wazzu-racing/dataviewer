@@ -10,55 +10,23 @@
 	// Default layout — shown the first time (no saved state)
 	// ---------------------------------------------------------------------------
 	function defaultLayout(): LayoutNode {
-		return ensureIds({
-			id: '',
-			type: 'horizontal',
-			panes: [
-				{ id: '', type: 'load-data', defaultSize: 25, minSize: 15 },
-				{ id: '', type: 'graph', defaultSize: 75, minSize: 20 }
-			]
-		});
+		return ensureIds({ id: '', type: 'load-data' });
 	}
 
-	// ---------------------------------------------------------------------------
-	// Persistence helpers
-	// ---------------------------------------------------------------------------
-	function loadLayout(): LayoutNode | null {
-		if (!browser) return null;
-		try {
-			const raw = localStorage.getItem('pane-layout');
-			if (raw) return ensureIds(JSON.parse(raw) as LayoutNode);
-		} catch {
-			// corrupted — ignore
-		}
-		return null;
-	}
-
-	function loadFloating(): FloatingPaneState[] {
-		if (!browser) return [];
-		try {
-			const raw = localStorage.getItem('floating-panes');
-			if (raw) return JSON.parse(raw) as FloatingPaneState[];
-		} catch {
-			// corrupted — ignore
-		}
-		return [];
+	function workingLayout(): LayoutNode {
+		return ensureIds({ id: '', type: 'graph' });
 	}
 
 	// ---------------------------------------------------------------------------
 	// State
 	// ---------------------------------------------------------------------------
-	let layout: LayoutNode = $state(loadLayout() ?? defaultLayout());
-	let floatingPanes: FloatingPaneState[] = $state(loadFloating());
+	let layout: LayoutNode = $state(defaultLayout());
+	let floatingPanes: FloatingPaneState[] = $state([]);
 	let topZ = $state(200);
 
 	// ---------------------------------------------------------------------------
-	// Persist on change
+	// Persist floating pane positions on change
 	// ---------------------------------------------------------------------------
-	$effect(() => {
-		if (browser) localStorage.setItem('pane-layout', JSON.stringify(layout));
-	});
-
 	$effect(() => {
 		if (browser) localStorage.setItem('floating-panes', JSON.stringify(floatingPanes));
 	});
@@ -75,8 +43,8 @@
 		if (updated) {
 			layout = ensureIds(updated);
 		} else {
-			// Last pane removed — reset to default
-			layout = defaultLayout();
+			// Last pane removed — transition to the working layout
+			layout = workingLayout();
 		}
 	}
 
@@ -88,7 +56,7 @@
 
 		// Remove from tiled tree
 		const updated = removePane(layout, nodeId);
-		layout = updated ? ensureIds(updated) : defaultLayout();
+		layout = updated ? ensureIds(updated) : workingLayout();
 
 		// Add as floating pane, centered in viewport
 		topZ += 1;

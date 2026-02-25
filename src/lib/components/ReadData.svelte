@@ -3,6 +3,8 @@
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseDataLine } from '$lib/dataParser';
 
+	let { onDismiss }: { onDismiss?: () => void } = $props();
+
 	let files: FileList | undefined = $state();
 
 	async function parse() {
@@ -51,5 +53,13 @@
 		<p class="text-sm text-emerald-600">
 			{globalData.lines.length.toLocaleString()} data points loaded
 		</p>
+		{#if onDismiss}
+			<button
+				onclick={onDismiss}
+				class="mt-1 rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+			>
+				Done
+			</button>
+		{/if}
 	{/if}
 </div>
