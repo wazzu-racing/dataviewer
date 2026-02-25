@@ -5,16 +5,17 @@
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
+	import LoadDataModal from '$lib/components/LoadDataModal.svelte';
 
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
 	// ---------------------------------------------------------------------------
 	function defaultLayout(): LayoutNode {
-		return ensureIds({ id: '', type: 'load-data' });
+		return ensureIds({ id: '', type: 'graph' });
 	}
 
 	function workingLayout(): LayoutNode {
-		return ensureIds({ id: '', type: 'graph' });
+		return defaultLayout();
 	}
 
 	function loadSavedLayout(): LayoutNode {
@@ -65,6 +66,8 @@
 	let layout: LayoutNode = $state(loadSavedLayout());
 	let floatingPanes: FloatingPaneState[] = $state(loadSavedFloatingPanes());
 	let topZ = $state(200);
+	// Always prompt for data on every page load — telemetry is never persisted across sessions.
+	let showLoadDataModal: boolean = $state(true);
 
 	// ---------------------------------------------------------------------------
 	// Persist layout and floating pane positions on change
@@ -190,3 +193,11 @@
 		{/each}
 	</div>
 </div>
+
+{#if showLoadDataModal}
+	<LoadDataModal
+		onDismiss={() => {
+			showLoadDataModal = false;
+		}}
+	/>
+{/if}
