@@ -231,49 +231,167 @@
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	function attachWheelZoom(u: any, el: HTMLElement) {
-		function onWheel(e: WheelEvent) {
-			e.preventDefault();
-			const [min, max] = getXRange(u);
-			const span = max - min;
-			// Zoom towards cursor position within the plot
-			const rect = el.getBoundingClientRect();
-			const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-			const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-			const newSpan = span * factor;
-			const pivot = min + frac * span;
-			const newMin = pivot - frac * newSpan;
-			const newMax = pivot + (1 - frac) * newSpan;
-			u.setScale('x', { min: newMin, max: newMax });
+	function getYRange(u: any, scaleKey: string): [number, number] {
+		const s = u.scales[scaleKey];
+		if (s && isFinite(s.min) && isFinite(s.max)) return [s.min as number, s.max as number];
+		// Fallback: compute from series data
+		const seriesIdx = (u.series as { scale?: string }[]).findIndex((sr) => sr.scale === scaleKey);
+		if (seriesIdx > 0) {
+			const yData = (u.data[seriesIdx] as number[]).filter(isFinite);
+			if (yData.length > 0)
+				return yData.reduce(
+					([lo, hi], v) => [v < lo ? v : lo, v > hi ? v : hi],
+					[yData[0], yData[0]]
+				);
 		}
-		el.addEventListener('wheel', onWheel, { passive: false });
-		return () => el.removeEventListener('wheel', onWheel);
+		return [0, 1];
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	function attachPan(u: any, el: HTMLElement) {
+	function detectAxisZone(
+		clientX: number,
+		clientY: number,
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		u: any,
+		wrap: HTMLElement
+	): 'x' | `y${number}` | 'plot' {
+		const over = wrap.querySelector('.u-over') as HTMLElement | null;
+		if (over) {
+			const r = over.getBoundingClientRect();
+			if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom)
+				return 'plot';
+		}
+		const axisEls = wrap.querySelectorAll('.u-axis');
+		for (let i = 0; i < axisEls.length; i++) {
+			const r = axisEls[i].getBoundingClientRect();
+			if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+				// u.axes[0] is the x-axis, u.axes[1..n] are y0, y1, ...
+				const scale = (u.axes as { scale?: string }[])[i]?.scale ?? 'x';
+				return scale as 'x' | `y${number}`;
+			}
+		}
+		return 'plot';
+	}
+
+	function attachWheelZoom(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		u: any,
+		wrap: HTMLElement,
+		manualYRanges: Map<string, [number, number]>
+	) {
+		function onWheel(e: WheelEvent) {
+			e.preventDefault();
+			const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+
+			// Use the inner plot overlay rect as the reference for cursor-pivot fractions.
+			const over = wrap.querySelector('.u-over') as HTMLElement | null;
+			const overRect = over?.getBoundingClientRect() ?? wrap.getBoundingClientRect();
+
+			// Horizontal fraction (0 = left edge, 1 = right edge)
+			const xFrac = Math.max(0, Math.min(1, (e.clientX - overRect.left) / overRect.width));
+			// Vertical fraction (0 = bottom, 1 = top) — matches data coordinates direction
+			const yFrac = 1 - Math.max(0, Math.min(1, (e.clientY - overRect.top) / overRect.height));
+
+			const zone = e.shiftKey ? detectAxisZone(e.clientX, e.clientY, u, wrap) : 'plot';
+
+			const zoomX = zone === 'plot' || zone === 'x';
+			const zoomY = zone === 'plot';
+			const zoomSpecificY = zone !== 'plot' && zone !== 'x' ? zone : null;
+
+			if (zoomX) {
+				const [min, max] = getXRange(u);
+				const span = max - min;
+				const pivot = min + xFrac * span;
+				u.setScale('x', {
+					min: pivot - xFrac * span * factor,
+					max: pivot + (1 - xFrac) * span * factor
+				});
+			}
+
+			if (zoomY) {
+				// Zoom all y-scales
+				const yScaleKeys = Object.keys(u.scales as Record<string, unknown>).filter((k) =>
+					k.startsWith('y')
+				);
+				for (const key of yScaleKeys) {
+					const [yMin, yMax] = getYRange(u, key);
+					const ySpan = yMax - yMin;
+					const pivot = yMin + yFrac * ySpan;
+					const newMin = pivot - yFrac * ySpan * factor;
+					const newMax = pivot + (1 - yFrac) * ySpan * factor;
+					manualYRanges.set(key, [newMin, newMax]);
+					u.setScale(key, { min: newMin, max: newMax });
+				}
+			} else if (zoomSpecificY) {
+				const [yMin, yMax] = getYRange(u, zoomSpecificY);
+				const ySpan = yMax - yMin;
+				const pivot = yMin + yFrac * ySpan;
+				const newMin = pivot - yFrac * ySpan * factor;
+				const newMax = pivot + (1 - yFrac) * ySpan * factor;
+				manualYRanges.set(zoomSpecificY, [newMin, newMax]);
+				u.setScale(zoomSpecificY, { min: newMin, max: newMax });
+			}
+		}
+		wrap.addEventListener('wheel', onWheel, { passive: false });
+		return () => wrap.removeEventListener('wheel', onWheel);
+	}
+
+	function attachPan(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		u: any,
+		el: HTMLElement,
+		manualYRanges: Map<string, [number, number]>
+	) {
 		let dragging = false;
 		let startX = 0;
+		let startY = 0;
 		let startMin = 0;
 		let startMax = 0;
+		// Snapshot of all y-scale ranges at drag start, keyed by scale name
+		let startYRanges = new Map<string, [number, number]>();
 
 		function onMouseDown(e: MouseEvent) {
 			// Only left button
 			if (e.button !== 0) return;
 			dragging = true;
 			startX = e.clientX;
+			startY = e.clientY;
 			[startMin, startMax] = getXRange(u);
+			startYRanges = new Map(
+				Object.keys(u.scales as Record<string, unknown>)
+					.filter((k) => k.startsWith('y'))
+					.map((k) => [k, getYRange(u, k)] as [string, [number, number]])
+			);
 		}
 
 		function onMouseMove(e: MouseEvent) {
 			if (!dragging) return;
 			const rect = el.getBoundingClientRect();
-			const span = startMax - startMin;
-			const pxSpan = rect.width;
-			if (pxSpan === 0) return;
-			const dx = e.clientX - startX;
-			const dVal = (dx / pxSpan) * span;
-			u.setScale('x', { min: startMin - dVal, max: startMax - dVal });
+
+			// Pan x
+			const xSpan = startMax - startMin;
+			const pxWidth = rect.width;
+			if (pxWidth > 0) {
+				const dx = e.clientX - startX;
+				const dValX = (dx / pxWidth) * xSpan;
+				u.setScale('x', { min: startMin - dValX, max: startMax - dValX });
+			}
+
+			// Pan y — only when at least one y-scale had a manual range at drag start
+			if (startYRanges.size > 0) {
+				const pxHeight = rect.height;
+				if (pxHeight > 0) {
+					const dy = e.clientY - startY;
+					for (const [key, [yMin, yMax]] of startYRanges) {
+						const ySpan = yMax - yMin;
+						// dy > 0 means cursor moved down → data shifts up → increase min/max
+						const dValY = (dy / pxHeight) * ySpan;
+						const newMin = yMin + dValY;
+						const newMax = yMax + dValY;
+						manualYRanges.set(key, [newMin, newMax]);
+						u.setScale(key, { min: newMin, max: newMax });
+					}
+				}
+			}
 		}
 
 		function onMouseUp() {
@@ -288,6 +406,35 @@
 			el.removeEventListener('mousedown', onMouseDown);
 			window.removeEventListener('mousemove', onMouseMove);
 			window.removeEventListener('mouseup', onMouseUp);
+		};
+	}
+
+	// Double-click on the plot area resets all manual y-zoom, restoring auto-fit.
+	// Suppressed when the double-click is the tail end of a drag (displacement > 4px).
+	function attachDoubleClickReset(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		u: any,
+		el: HTMLElement,
+		manualYRanges: Map<string, [number, number]>
+	) {
+		let downX = 0;
+		let downY = 0;
+		function onMouseDown(e: MouseEvent) {
+			downX = e.clientX;
+			downY = e.clientY;
+		}
+		function onDblClick(e: MouseEvent) {
+			const dx = e.clientX - downX;
+			const dy = e.clientY - downY;
+			if (dx * dx + dy * dy > 16) return; // suppress if drag > 4px
+			manualYRanges.clear();
+			u.redraw();
+		}
+		el.addEventListener('mousedown', onMouseDown);
+		el.addEventListener('dblclick', onDblClick);
+		return () => {
+			el.removeEventListener('mousedown', onMouseDown);
+			el.removeEventListener('dblclick', onDblClick);
 		};
 	}
 
@@ -339,10 +486,27 @@
 				});
 			}
 
-			// Independent scale per Y series
+			// Independent scale per Y series.
+			// manualYRanges holds user-set y-zoom ranges keyed by scale name.
+			// When populated, the range function returns the locked bounds instead of
+			// letting uPlot auto-fit, which prevents panning the x-axis from resetting
+			// a y-zoom the user has already applied.
+			const manualYRanges = new Map<string, [number, number]>();
 			const scales: Record<string, uPlot.Scale> = { x: { time: false } };
 			for (let i = 0; i < ys.length; i++) {
-				scales[`y${i}`] = { auto: true };
+				const key = `y${i}`;
+				scales[key] = {
+					// range is called by uPlot whenever it needs to (re)compute the visible
+					// y bounds. Returning null falls back to uPlot's built-in auto-fit.
+					range: (_u, dataMin, dataMax) => {
+						const manual = manualYRanges.get(key);
+						if (manual) return manual;
+						// Auto-fit: give a small 5% padding so the line isn't flush with
+						// the axis edges, matching uPlot's default auto behaviour.
+						const pad = (dataMax - dataMin) * 0.05 || 1;
+						return [dataMin - pad, dataMax + pad];
+					}
+				};
 			}
 
 			// Show at most 2 Y axes (left + right) to avoid clutter
@@ -423,15 +587,19 @@
 				uplotInstance.setSize({ width, height });
 			});
 
-			// Attach zoom and pan to the uPlot overlay element
-			const plotEl = container!.querySelector('.u-over') as HTMLElement | null;
-			if (plotEl) {
-				const detachWheel = attachWheelZoom(uplotInstance, plotEl);
-				const detachPan = attachPan(uplotInstance, plotEl);
+			// Attach wheel zoom to the whole uPlot wrapper (so axis gutters are included),
+			// and pan to the inner overlay only (pan is scoped to the plot area).
+			const wrapEl = container!.querySelector('.u-wrap') as HTMLElement | null;
+			const overEl = container!.querySelector('.u-over') as HTMLElement | null;
+			if (wrapEl && overEl) {
+				const detachWheel = attachWheelZoom(uplotInstance, wrapEl, manualYRanges);
+				const detachPan = attachPan(uplotInstance, overEl, manualYRanges);
+				const detachDblClick = attachDoubleClickReset(uplotInstance, overEl, manualYRanges);
 				// Stash cleanup on the instance for teardown
 				uplotInstance._detachInteractions = () => {
 					detachWheel();
 					detachPan();
+					detachDblClick();
 				};
 			}
 		});
