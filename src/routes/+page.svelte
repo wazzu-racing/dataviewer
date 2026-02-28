@@ -1,55 +1,281 @@
 <script lang="ts">
-	import PaneLayout from './PaneLayout.svelte';
+	import { browser } from '$app/environment';
+	import type { DataLine } from '$lib/types';
+	import type { LayoutNode, FloatingPaneState, PaneWidgetType, DropPosition } from '$lib/types';
+	import {
+		ensureIds,
+		insertPane,
+		removePane,
+		findNode,
+		updateConfig,
+		movePane,
+		swapPanes
+	} from '$lib/layoutUtils';
+	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
-	import type { LayoutNode, DropPosition } from '$lib/types';
-	import { ensureIds, insertPane, removePane, movePane } from '$lib/layoutUtils';
+	import FloatingPane from '$lib/components/FloatingPane.svelte';
+	import LoadDataModal from '$lib/components/LoadDataModal.svelte';
+	import TopBar from '$lib/components/TopBar.svelte';
 
-	// Start with a simple layout
-	let layout: LayoutNode = ensureIds({
-		type: 'horizontal',
-		panes: [{ type: 'loaddata', defaultSize: 100 }]
-	});
+	import { data as globalData } from '$lib/data.svelte';
+	import { dataStore } from '$lib/stores/dataStore';
 
-	function handleDrop(nodeId: string, paneType: string, position: DropPosition) {
-		layout = ensureIds(insertPane(layout, nodeId, paneType, position));
+	// ---------------------------------------------------------------------------
+	// Default layout — shown the first time (no saved state)
+	// ---------------------------------------------------------------------------
+	function defaultLayout(): LayoutNode {
+		return ensureIds({ id: '', type: 'graph' });
 	}
 
-	function handleMove(sourceId: string, targetId: string, position: DropPosition) {
-		const newLayout = movePane(layout, sourceId, targetId, position);
-		if (newLayout) {
-			layout = ensureIds(newLayout);
+	function workingLayout(): LayoutNode {
+		return defaultLayout();
+	}
+
+	function loadSavedLayout(isChild: boolean): LayoutNode {
+		if (!browser) return defaultLayout();
+		try {
+			let key = isChild ? 'child-layout' : 'layout';
+
+			const raw = localStorage.getItem(key);
+			if (!raw) return defaultLayout();
+			const parsed = JSON.parse(raw) as LayoutNode;
+			return ensureIds(parsed);
+		} catch {
+			return defaultLayout();
 		}
+	}
+
+	const VALID_WIDGET_TYPES = new Set<string>(['graph', 'map', 'table', 'gauge', 'load-data']);
+
+	function isValidFloatingPane(p: unknown): p is FloatingPaneState {
+		if (typeof p !== 'object' || p === null) return false;
+		const o = p as Record<string, unknown>;
+		return (
+			typeof o.id === 'string' &&
+			typeof o.type === 'string' &&
+			VALID_WIDGET_TYPES.has(o.type) &&
+			typeof o.x === 'number' &&
+			typeof o.y === 'number' &&
+			typeof o.width === 'number' &&
+			typeof o.height === 'number' &&
+			typeof o.zIndex === 'number'
+		);
+	}
+
+	function loadSavedFloatingPanes(): FloatingPaneState[] {
+		if (!browser) return [];
+		try {
+			const raw = localStorage.getItem('floating-panes');
+			if (!raw) return [];
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter(isValidFloatingPane);
+		} catch {
+			return [];
+		}
+	}
+
+	// Always prompt for data on every page load — telemetry is never persisted across sessions.
+	let showLoadDataModal: boolean = $state(true);
+
+	// ---------------------------------------------------------------------------
+	// Window handling
+	// ---------------------------------------------------------------------------
+
+	let isChild: boolean = false;
+	let windowObject: Window | null = null;
+
+	setIsChild();
+
+	function createChildWindow(): void {
+		if (!browser) {
+			return;
+		}
+
+		windowObject = window.open('/', '', 'popup=true');
+
+		window.setTimeout(() => {
+			windowObject?.postMessage(JSON.stringify(globalData.lines));
+		}, 1000);
+	}
+
+	function setIsChild(): void {
+		if (!browser) {
+			return;
+		}
+
+		if (window.opener != null) {
+			isChild = true;
+			showLoadDataModal = false;
+			globalData.lines = [];
+
+			windowObject = window.opener;
+			window.addEventListener('message', recieveMessageFromParent);
+		}
+	}
+
+	function recieveMessageFromParent(e: MessageEvent): void {
+		globalData.lines = JSON.parse(e.data);
+
+		dataStore.update((old) => ({
+			...old,
+			telemetry: globalData.lines
+		}));
+	}
+
+	// ---------------------------------------------------------------------------
+	// State — seeded from localStorage on mount
+	// ---------------------------------------------------------------------------
+	console.log('IsChild is ' + isChild);
+	let layout: LayoutNode = $state(loadSavedLayout(isChild));
+	let floatingPanes: FloatingPaneState[] = $state(loadSavedFloatingPanes());
+	let topZ = $state(200);
+
+	// ---------------------------------------------------------------------------
+	// Persist layout and floating pane positions on change
+	// ---------------------------------------------------------------------------
+	$effect(() => {
+		if (browser) localStorage.setItem(isChild ? 'child-layout' : 'layout', JSON.stringify(layout));
+	});
+
+	$effect(() => {
+		if (browser)
+			localStorage.setItem(
+				isChild ? 'child-floating-panes' : 'floating-panes',
+				JSON.stringify(floatingPanes)
+			);
+	});
+
+	// ---------------------------------------------------------------------------
+	// Tiled layout callbacks
+	// ---------------------------------------------------------------------------
+	function handleDrop(nodeId: string, widgetType: PaneWidgetType, position: DropPosition) {
+		layout = ensureIds(insertPane(layout, nodeId, widgetType, position));
 	}
 
 	function handleRemove(nodeId: string) {
-		const newLayout = removePane(layout, nodeId);
-		if (newLayout) {
-			layout = ensureIds(newLayout);
-		}
-
-		// If we removed the last pane, replace with an empty leaf pane
-		// This ensures there's always a drop zone available
-		if (
-			layout.type === 'horizontal' || layout.type === 'vertical'
-				? !layout.panes || layout.panes.length === 0
-				: false
-		) {
-			layout = ensureIds({
-				type: 'leaf',
-				defaultSize: 100
-			});
+		const updated = removePane(layout, nodeId);
+		if (updated) {
+			layout = ensureIds(updated);
+		} else {
+			// Last pane removed — transition to the working layout
+			layout = workingLayout();
 		}
 	}
 
-	// For more layout examples, see QUICK_START.md
+	function handlePopOut(nodeId: string) {
+		const node = findNode(layout, nodeId);
+		if (!node) return;
+		const type = node.type as PaneWidgetType;
+		const config = node.config;
+
+		// Remove from tiled tree
+		const updated = removePane(layout, nodeId);
+		layout = updated ? ensureIds(updated) : workingLayout();
+
+		// Add as floating pane, centered in viewport
+		topZ += 1;
+		const w = 480;
+		const h = 340;
+		const x = browser ? Math.max(0, (window.innerWidth - w) / 2) : 100;
+		const y = browser ? Math.max(0, (window.innerHeight - h) / 3) : 80;
+
+		floatingPanes = [
+			...floatingPanes,
+			{ id: crypto.randomUUID(), type, x, y, width: w, height: h, zIndex: topZ, config }
+		];
+	}
+
+	// ---------------------------------------------------------------------------
+	// Floating pane callbacks
+	// ---------------------------------------------------------------------------
+	function handleFloatClose(id: string) {
+		floatingPanes = floatingPanes.filter((p) => p.id !== id);
+	}
+
+	function handleFloatFocus(id: string) {
+		topZ += 1;
+		floatingPanes = floatingPanes.map((p) => (p.id === id ? { ...p, zIndex: topZ } : p));
+	}
+
+	function handleDock(id: string) {
+		const pane = floatingPanes.find((p) => p.id === id);
+		if (!pane) return;
+
+		// Remove from floating
+		floatingPanes = floatingPanes.filter((p) => p.id !== id);
+
+		// Wrap current layout in a horizontal group with the new pane docked on the right
+		const newNode: LayoutNode = ensureIds({
+			id: '',
+			type: pane.type,
+			defaultSize: 25,
+			minSize: 10,
+			config: pane.config
+		});
+
+		layout = ensureIds({
+			id: '',
+			type: 'horizontal',
+			panes: [{ ...layout, defaultSize: 75 }, newNode]
+		});
+	}
+
+	// ---------------------------------------------------------------------------
+	// Config change callbacks
+	// ---------------------------------------------------------------------------
+	function handleLayoutConfigChange(nodeId: string, config: Record<string, unknown>) {
+		layout = updateConfig(layout, nodeId, config);
+	}
+
+	function handleFloatConfigChange(id: string, config: Record<string, unknown>) {
+		floatingPanes = floatingPanes.map((p) => (p.id === id ? { ...p, config } : p));
+	}
+
+	// --- Handle pane moves / swaps ---
+	function handleMove(sourceId: string, targetId: string, position: DropPosition) {
+		if (sourceId === targetId) return;
+		let updated: LayoutNode | null;
+		if (position === 'center') {
+			updated = swapPanes(layout, sourceId, targetId);
+		} else {
+			updated = movePane(layout, sourceId, targetId, position);
+		}
+		layout = updated ? ensureIds(updated) : workingLayout();
+	}
 </script>
 
-<div class="h-screen w-full flex">
-	<!-- Sidebar with draggable pane types -->
-	<PaneToolbar />
+<div class="flex flex-col h-screen w-full overflow-hidden bg-stone-100">
+	<TopBar openChildWindow={() => createChildWindow()} />
+	<div class="flex flex-1 overflow-hidden">
+		<PaneToolbar />
+		<div class="relative flex-1 overflow-hidden">
+			<PaneLayout
+				{layout}
+				onDrop={handleDrop}
+				onRemove={handleRemove}
+				onPopOut={handlePopOut}
+				onConfigChange={handleLayoutConfigChange}
+				onMove={handleMove}
+			/>
 
-	<!-- Main layout area -->
-	<div class="flex-1 overflow-hidden">
-		<PaneLayout {layout} onDrop={handleDrop} onMove={handleMove} onRemove={handleRemove} />
+			{#each floatingPanes as pane (pane.id)}
+				<FloatingPane
+					{pane}
+					onClose={handleFloatClose}
+					onFocus={handleFloatFocus}
+					onDock={handleDock}
+					onConfigChange={handleFloatConfigChange}
+				/>
+			{/each}
+		</div>
 	</div>
 </div>
+
+{#if showLoadDataModal}
+	<LoadDataModal
+		onDismiss={() => {
+			showLoadDataModal = false;
+		}}
+	/>
+{/if}

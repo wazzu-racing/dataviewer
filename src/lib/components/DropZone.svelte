@@ -1,84 +1,65 @@
 <script lang="ts">
-	import type { DropPosition } from '$lib/types';
-	import { dragState } from '$lib/stores/dragStore';
+	import type { DropPosition, PaneWidgetType } from '$lib/types';
 
-	export let nodeId: string;
-	export let onDrop: (nodeId: string, paneType: string, position: DropPosition) => void;
-	export let onMove: (
-		sourceId: string,
-		targetId: string,
-		position: DropPosition
-	) => void = () => {};
+	type Props = {
+		nodeId: string;
+		onDrop: (nodeId: string, widgetType: PaneWidgetType, position: DropPosition) => void;
+		onMove?: (sourceId: string, nodeId: string, position: DropPosition) => void;
+		children?: import('svelte').Snippet;
+	};
 
-	// Constants for drop position detection
-	const CENTER_DROP_THRESHOLD = 0.25; // 25% of smallest dimension
+	let { nodeId, onDrop, onMove, children }: Props = $props();
 
-	let isDraggingOver = false;
-	let dropPosition: DropPosition | null = null;
+	let isDraggingOver = $state(false);
+	let dropPosition: DropPosition | null = $state(null);
 
-	$: dragOperation = $dragState?.operation || null;
-	$: dragSourceId = $dragState?.nodeId || null;
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
-		if (!event.dataTransfer) return;
-
-		// Check if we're trying to drop on self
-		if (dragOperation === 'move' && dragSourceId === nodeId) {
-			event.dataTransfer.dropEffect = 'none';
-			isDraggingOver = false;
-			dropPosition = null;
-			return;
-		}
-
-		event.dataTransfer.dropEffect = dragOperation === 'move' ? 'move' : 'copy';
-		isDraggingOver = true;
-
-		// Calculate drop position based on mouse position
-		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+	function getDropPosition(event: DragEvent, el: HTMLElement): DropPosition {
+		const rect = el.getBoundingClientRect();
 		const x = event.clientX - rect.left;
 		const y = event.clientY - rect.top;
+		const w = rect.width;
+		const h = rect.height;
 
-		const centerX = rect.width / 2;
-		const centerY = rect.height / 2;
+		// 25% edge zones
+		const edgeFraction = 0.25;
+		const leftEdge = w * edgeFraction;
+		const rightEdge = w * (1 - edgeFraction);
+		const topEdge = h * edgeFraction;
+		const bottomEdge = h * (1 - edgeFraction);
 
-		const distanceFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-		const threshold = Math.min(rect.width, rect.height) * CENTER_DROP_THRESHOLD;
+		if (y < topEdge) return 'top';
+		if (y > bottomEdge) return 'bottom';
+		if (x < leftEdge) return 'left';
+		if (x > rightEdge) return 'right';
+		return 'center';
+	}
 
-		if (distanceFromCenter < threshold) {
-			dropPosition = 'center';
-		} else {
-			// Determine which edge is closest
-			const distances = {
-				top: y,
-				bottom: rect.height - y,
-				left: x,
-				right: rect.width - x
-			};
+	function isDraggingPaneType(event: DragEvent): boolean {
+		return event.dataTransfer?.types.includes('application/pane-type') ?? false;
+	}
 
-			let closest: DropPosition = 'top';
-			let minDist = distances.top;
+	function isDraggingPaneId(event: DragEvent): boolean {
+		return event.dataTransfer?.types.includes('application/pane-id') ?? false;
+	}
 
-			if (distances.bottom < minDist) {
-				closest = 'bottom';
-				minDist = distances.bottom;
-			}
-			if (distances.left < minDist) {
-				closest = 'left';
-				minDist = distances.left;
-			}
-			if (distances.right < minDist) {
-				closest = 'right';
-			}
+	function allowsDnD(event: DragEvent): boolean {
+		return isDraggingPaneType(event) || isDraggingPaneId(event);
+	}
 
-			dropPosition = closest;
-		}
+	function handleDragOver(event: DragEvent) {
+		if (!allowsDnD(event)) return;
+		event.preventDefault();
+		if (event.dataTransfer)
+			event.dataTransfer.dropEffect = isDraggingPaneType(event) ? 'copy' : 'move';
+		isDraggingOver = true;
+		dropPosition = getDropPosition(event, event.currentTarget as HTMLElement);
 	}
 
 	function handleDragLeave(event: DragEvent) {
-		// Only hide if we're actually leaving the drop zone (not entering a child)
-		const relatedTarget = event.relatedTarget as HTMLElement;
-		if (!relatedTarget || !(event.currentTarget as HTMLElement).contains(relatedTarget)) {
+		// Only clear if leaving the zone itself, not entering a child
+		const target = event.currentTarget as HTMLElement;
+		const related = event.relatedTarget as Node | null;
+		if (!related || !target.contains(related)) {
 			isDraggingOver = false;
 			dropPosition = null;
 		}
@@ -86,166 +67,61 @@
 
 	function handleDrop(event: DragEvent) {
 		event.preventDefault();
-		event.stopPropagation();
-
-		if (!dropPosition || !$dragState) {
+		isDraggingOver = false;
+		const movePaneId = event.dataTransfer?.getData('application/pane-id') as string | undefined;
+		const widgetType = event.dataTransfer?.getData('application/pane-type') as
+			| PaneWidgetType
+			| undefined;
+		if (!dropPosition) return;
+		if (movePaneId && onMove && movePaneId !== nodeId) {
+			onMove(movePaneId, nodeId, dropPosition);
+			dropPosition = null;
 			return;
 		}
-
-		// Use the drag state store instead of trying to parse event data
-		const dragItem = $dragState;
-
-		if (dragItem.operation === 'move' && dragItem.nodeId) {
-			// Moving an existing pane
-			if (dragItem.nodeId !== nodeId) {
-				onMove(dragItem.nodeId, nodeId, dropPosition);
-			}
-		} else if (dragItem.paneType) {
-			// Adding a new pane
-			onDrop(nodeId, dragItem.paneType, dropPosition);
+		if (widgetType) {
+			onDrop(nodeId, widgetType, dropPosition);
+			dropPosition = null;
 		}
-
-		isDraggingOver = false;
-		dropPosition = null;
 	}
 </script>
 
 <div
-	class="drop-zone"
-	on:dragover={handleDragOver}
-	on:dragleave={handleDragLeave}
-	on:drop={handleDrop}
-	role="button"
-	tabindex="0"
+	class="relative h-full w-full"
+	role="region"
+	ondragover={handleDragOver}
+	ondragleave={handleDragLeave}
+	ondrop={handleDrop}
 >
-	<slot />
+	{#if children}{@render children()}{/if}
 
 	{#if isDraggingOver && dropPosition}
-		{@const isMove = dragOperation === 'move'}
-		{@const orientationClass =
-			dropPosition === 'top' || dropPosition === 'bottom'
-				? 'horizontal'
-				: dropPosition === 'center'
-					? 'center'
-					: 'vertical'}
-		<div class="drop-indicator-container">
-			<div class="drop-indicator {orientationClass} {dropPosition} {isMove ? 'move' : ''}">
-				{#if dropPosition === 'center'}
-					<div class="center-overlay {isMove ? 'move' : ''}">
-						<div class="center-icon">{isMove ? '↔' : '+'}</div>
-						<div class="center-text">{isMove ? 'Move here' : 'Drop to split'}</div>
-					</div>
-				{/if}
+		<!-- Directional drop indicators -->
+		{#if dropPosition === 'top'}
+			<div
+				class="pointer-events-none absolute inset-x-0 top-0 z-50 h-1 bg-blue-500 shadow-lg"
+			></div>
+			<div class="pointer-events-none absolute inset-0 z-40 bg-blue-500/10"></div>
+		{:else if dropPosition === 'bottom'}
+			<div
+				class="pointer-events-none absolute inset-x-0 bottom-0 z-50 h-1 bg-blue-500 shadow-lg"
+			></div>
+			<div class="pointer-events-none absolute inset-0 z-40 bg-blue-500/10"></div>
+		{:else if dropPosition === 'left'}
+			<div
+				class="pointer-events-none absolute inset-y-0 left-0 z-50 w-1 bg-blue-500 shadow-lg"
+			></div>
+			<div class="pointer-events-none absolute inset-0 z-40 bg-blue-500/10"></div>
+		{:else if dropPosition === 'right'}
+			<div
+				class="pointer-events-none absolute inset-y-0 right-0 z-50 w-1 bg-blue-500 shadow-lg"
+			></div>
+			<div class="pointer-events-none absolute inset-0 z-40 bg-blue-500/10"></div>
+		{:else if dropPosition === 'center'}
+			<div
+				class="pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded border-2 border-dashed border-blue-500 bg-blue-500/15"
+			>
+				<span class="rounded bg-blue-500 px-2 py-1 text-sm font-semibold text-white">+</span>
 			</div>
-		</div>
+		{/if}
 	{/if}
 </div>
-
-<style>
-	.drop-zone {
-		position: relative;
-		width: 100%;
-		height: 100%;
-	}
-
-	.drop-indicator-container {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		pointer-events: none;
-		z-index: 1000;
-	}
-
-	.drop-indicator {
-		position: absolute;
-		background: rgba(59, 130, 246, 0.5);
-		border: 2px solid rgb(59, 130, 246);
-		animation: pulse 1s ease-in-out infinite;
-	}
-
-	.drop-indicator.move {
-		background: rgba(168, 85, 247, 0.5);
-		border: 2px solid rgb(168, 85, 247);
-	}
-
-	.drop-indicator.horizontal {
-		left: 0;
-		right: 0;
-		height: 8px;
-	}
-
-	.drop-indicator.horizontal.top {
-		top: 0;
-		border-radius: 4px 4px 0 0;
-	}
-
-	.drop-indicator.horizontal.bottom {
-		bottom: 0;
-		border-radius: 0 0 4px 4px;
-	}
-
-	.drop-indicator.vertical {
-		top: 0;
-		bottom: 0;
-		width: 8px;
-	}
-
-	.drop-indicator.vertical.left {
-		left: 0;
-		border-radius: 4px 0 0 4px;
-	}
-
-	.drop-indicator.vertical.right {
-		right: 0;
-		border-radius: 0 4px 4px 0;
-	}
-
-	.drop-indicator.center {
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(59, 130, 246, 0.2);
-		border: 3px dashed rgb(59, 130, 246);
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.center-overlay {
-		background: rgba(59, 130, 246, 0.9);
-		color: white;
-		padding: 2rem;
-		border-radius: 12px;
-		text-align: center;
-		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-	}
-
-	.center-overlay.move {
-		background: rgba(168, 85, 247, 0.9);
-	}
-
-	.center-icon {
-		font-size: 3rem;
-		font-weight: bold;
-		margin-bottom: 0.5rem;
-	}
-
-	.center-text {
-		font-size: 1.125rem;
-		font-weight: 600;
-	}
-
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.6;
-		}
-	}
-</style>
