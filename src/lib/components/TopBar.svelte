@@ -14,6 +14,7 @@
 		</button>
 	</div>
 	<div>
+		<span>Wazzu Racing</span>
 		<!-- Right section for future features -->
 	</div>
 </div>
