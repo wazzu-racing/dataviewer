@@ -2,6 +2,7 @@
 	import { NUM_FIELDS } from '$lib/types';
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseDataLine } from '$lib/dataParser';
+	import { dataStore } from '$lib/stores/dataStore';
 
 	let { onDismiss }: { onDismiss?: () => void } = $props();
 
@@ -34,6 +35,12 @@
 		}
 
 		globalData.lines = rawRows.map(parseDataLine);
+
+		// Synchronize telemetry to shared dataStore!
+		dataStore.update((old) => ({
+			...old,
+			telemetry: globalData.lines
+		}));
 	}
 </script>
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import type { DataLine } from '$lib/types';
 	import type { LayoutNode, FloatingPaneState, PaneWidgetType, DropPosition } from '$lib/types';
 	import {
 		ensureIds,
@@ -14,6 +15,10 @@
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
 	import LoadDataModal from '$lib/components/LoadDataModal.svelte';
+	import TopBar from '$lib/components/TopBar.svelte';
+
+	import { data as globalData } from '$lib/data.svelte';
+	import { dataStore } from '$lib/stores/dataStore';
 
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
@@ -26,10 +31,12 @@
 		return defaultLayout();
 	}
 
-	function loadSavedLayout(): LayoutNode {
+	function loadSavedLayout(isChild: boolean): LayoutNode {
 		if (!browser) return defaultLayout();
 		try {
-			const raw = localStorage.getItem('layout');
+			let key = isChild ? 'child-layout' : 'layout';
+
+			const raw = localStorage.getItem(key);
 			if (!raw) return defaultLayout();
 			const parsed = JSON.parse(raw) as LayoutNode;
 			return ensureIds(parsed);
@@ -68,24 +75,75 @@
 		}
 	}
 
+	// Always prompt for data on every page load — telemetry is never persisted across sessions.
+	let showLoadDataModal: boolean = $state(true);
+
+	// ---------------------------------------------------------------------------
+	// Window handling
+	// ---------------------------------------------------------------------------
+
+	let isChild: boolean = false;
+	let windowObject: Window | null = null;
+
+	setIsChild();
+
+	function createChildWindow(): void {
+		if (!browser) {
+			return;
+		}
+
+		windowObject = window.open('/', '', 'popup=true');
+
+		window.setTimeout(() => {
+			windowObject?.postMessage(JSON.stringify(globalData.lines));
+		}, 1000);
+	}
+
+	function setIsChild(): void {
+		if (!browser) {
+			return;
+		}
+
+		if (window.opener != null) {
+			isChild = true;
+			showLoadDataModal = false;
+			globalData.lines = [];
+
+			windowObject = window.opener;
+			window.addEventListener('message', recieveMessageFromParent);
+		}
+	}
+
+	function recieveMessageFromParent(e: MessageEvent): void {
+		globalData.lines = JSON.parse(e.data);
+
+		dataStore.update((old) => ({
+			...old,
+			telemetry: globalData.lines
+		}));
+	}
+
 	// ---------------------------------------------------------------------------
 	// State — seeded from localStorage on mount
 	// ---------------------------------------------------------------------------
-	let layout: LayoutNode = $state(loadSavedLayout());
+	console.log('IsChild is ' + isChild);
+	let layout: LayoutNode = $state(loadSavedLayout(isChild));
 	let floatingPanes: FloatingPaneState[] = $state(loadSavedFloatingPanes());
 	let topZ = $state(200);
-	// Always prompt for data on every page load — telemetry is never persisted across sessions.
-	let showLoadDataModal: boolean = $state(true);
 
 	// ---------------------------------------------------------------------------
 	// Persist layout and floating pane positions on change
 	// ---------------------------------------------------------------------------
 	$effect(() => {
-		if (browser) localStorage.setItem('layout', JSON.stringify(layout));
+		if (browser) localStorage.setItem(isChild ? 'child-layout' : 'layout', JSON.stringify(layout));
 	});
 
 	$effect(() => {
-		if (browser) localStorage.setItem('floating-panes', JSON.stringify(floatingPanes));
+		if (browser)
+			localStorage.setItem(
+				isChild ? 'child-floating-panes' : 'floating-panes',
+				JSON.stringify(floatingPanes)
+			);
 	});
 
 	// ---------------------------------------------------------------------------
@@ -187,31 +245,30 @@
 	}
 </script>
 
-<div class="flex h-screen w-full overflow-hidden bg-stone-100">
-	<!-- Sidebar toolbar -->
-	<PaneToolbar />
-
-	<!-- Main tiled layout area + floating pane container -->
-	<div class="relative flex-1 overflow-hidden">
-		<PaneLayout
-			{layout}
-			onDrop={handleDrop}
-			onRemove={handleRemove}
-			onPopOut={handlePopOut}
-			onConfigChange={handleLayoutConfigChange}
-			onMove={handleMove}
-		/>
-
-		<!-- Floating panes rendered on top -->
-		{#each floatingPanes as pane (pane.id)}
-			<FloatingPane
-				{pane}
-				onClose={handleFloatClose}
-				onFocus={handleFloatFocus}
-				onDock={handleDock}
-				onConfigChange={handleFloatConfigChange}
+<div class="flex flex-col h-screen w-full overflow-hidden bg-stone-100">
+	<TopBar openChildWindow={() => createChildWindow()} />
+	<div class="flex flex-1 overflow-hidden">
+		<PaneToolbar />
+		<div class="relative flex-1 overflow-hidden">
+			<PaneLayout
+				{layout}
+				onDrop={handleDrop}
+				onRemove={handleRemove}
+				onPopOut={handlePopOut}
+				onConfigChange={handleLayoutConfigChange}
+				onMove={handleMove}
 			/>
-		{/each}
+
+			{#each floatingPanes as pane (pane.id)}
+				<FloatingPane
+					{pane}
+					onClose={handleFloatClose}
+					onFocus={handleFloatFocus}
+					onDock={handleDock}
+					onConfigChange={handleFloatConfigChange}
+				/>
+			{/each}
+		</div>
 	</div>
 </div>
 
