@@ -1,5 +1,14 @@
 import type { LayoutNode, DropPosition, PaneWidgetType } from '$lib/types';
 
+/** Generates a UUID-like string */
+function generateUUID(): string {
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+		const r = (Math.random() * 16) | 0;
+		const v = c === 'x' ? r : (r & 0x3) | 0x8;
+		return v.toString(16);
+	});
+}
+
 // ---------------------------------------------------------------------------
 // Structured clone sanitizer: strips functions, classes, DOM nodes, etc.
 // ---------------------------------------------------------------------------
@@ -39,7 +48,7 @@ function sanitizeForStructuredClone(value: unknown): any {
 export function ensureIds(node: LayoutNode): LayoutNode {
 	const result: LayoutNode = {
 		...node,
-		id: node.id || crypto.randomUUID()
+		id: node.id || generateUUID()
 	};
 	if (result.panes) {
 		result.panes = result.panes.map(ensureIds);
@@ -228,7 +237,7 @@ export function movePane(
 		}
 		const wrappedTarget: LayoutNode = { ...target, defaultSize: 50 };
 		const group: LayoutNode = ensureIds({
-			id: '',
+			id: generateUUID(),
 			type: requiredDirection,
 			defaultSize: target.defaultSize,
 			minSize: target.minSize,
@@ -258,7 +267,7 @@ export function movePane(
 		const wrappedTarget: LayoutNode = { ...withoutSource, defaultSize: 50 };
 		const wrappedSource: LayoutNode = { ...nodeToMove, defaultSize: 50 };
 		const group: LayoutNode = ensureIds({
-			id: '',
+			id: generateUUID(),
 			type: requiredDirection,
 			defaultSize: 100,
 			panes: isBefore ? [wrappedSource, wrappedTarget] : [wrappedTarget, wrappedSource]

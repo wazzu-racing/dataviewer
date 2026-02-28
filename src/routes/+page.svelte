@@ -18,6 +18,14 @@
 	import TopBar from '$lib/components/TopBar.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
+
+	function generateUUID(): string {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+			const r = (Math.random() * 16) | 0;
+			const v = c === 'x' ? r : (r & 0x3) | 0x8;
+			return v.toString(16);
+		});
+	}
 	import { dataStore } from '$lib/stores/dataStore';
 
 	// ---------------------------------------------------------------------------
@@ -182,7 +190,7 @@
 
 		floatingPanes = [
 			...floatingPanes,
-			{ id: crypto.randomUUID(), type, x, y, width: w, height: h, zIndex: topZ, config }
+			{ id: generateUUID(), type, x, y, width: w, height: h, zIndex: topZ, config }
 		];
 	}
 
