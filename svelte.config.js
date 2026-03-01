@@ -9,7 +9,7 @@ const config = {
 		adapter: adapter(),
 		paths: {
 			// Replace 'your-repo-name' with the name of your GitHub repository
-			base: 'dataviewer'
+			base: '/dataviewer'
 		},
 		appDir: 'app' // Optional: Customize the app directory name if needed
 	}
