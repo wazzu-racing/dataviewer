@@ -1,11 +1,36 @@
 <script lang="ts">
 	import ReadData from '$lib/components/ReadData.svelte';
+	import GithubFilePicker from '$lib/components/GithubFilePicker.svelte';
+	import { data as globalData } from '$lib/data.svelte';
 
 	type Props = {
 		onDismiss: () => void;
 	};
 
 	let { onDismiss }: Props = $props();
+
+	let readData: ReadData;
+
+	let showGithubPicker = $state(false);
+	let loadingBin = $state(false);
+
+	async function handleGithubFile(url: string) {
+		loadingBin = true;
+		try {
+			const res = await fetch(url);
+			if (!res.ok) throw new Error('Could not fetch file');
+			const buffer = await res.arrayBuffer();
+			await readData.parse(buffer);
+			showGithubPicker = false; // Optionally hide picker after load
+		} catch (err: any) {
+			alert('Error loading .bin from Github: ' + err.message);
+		}
+		loadingBin = false;
+	}
+
+	function loadFromGithub() {
+		showGithubPicker = !showGithubPicker;
+	}
 </script>
 
 <!-- Backdrop -->
@@ -17,18 +42,38 @@
 >
 	<!-- Card -->
 	<div class="relative w-full max-w-sm rounded-xl border border-stone-200 bg-white shadow-2xl">
-		<!-- Close button -->
-		<button
-			onclick={onDismiss}
-			title="Close"
-			class="absolute right-2 top-2 rounded px-1.5 py-0.5 text-xs text-stone-400 hover:bg-red-100 hover:text-red-600"
-		>
-			✕
-		</button>
-
 		<!-- ReadData fills the card -->
 		<div class="min-h-56">
-			<ReadData {onDismiss} />
+			<ReadData bind:this={readData} {onDismiss} />
 		</div>
+
+		<div class="min-h-56">
+			<button
+				onclick={loadFromGithub}
+				class="w-full mt-3 mb-3 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600 text-base font-semibold"
+			>
+				{showGithubPicker ? 'Hide Github Files' : 'Load from Github'}
+			</button>
+			{#if showGithubPicker}
+				<div class="mt-2 mb-4 max-h-64 overflow-y-auto border rounded">
+					<GithubFilePicker onFileSelected={handleGithubFile} {loadingBin} />
+				</div>
+			{/if}
+		</div>
+
+		<!-- Items loaded + Done button, only after telemetry is parsed -->
+		{#if globalData.lines.length > 0}
+			<div class="w-full py-2">
+				<p class="text-center text-sm text-emerald-600 mb-2">
+					{globalData.lines.length.toLocaleString()} items loaded
+				</p>
+				<button
+					onclick={onDismiss}
+					class="w-full px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700"
+				>
+					Done
+				</button>
+			</div>
+		{/if}
 	</div>
 </div>
