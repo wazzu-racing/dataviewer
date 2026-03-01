@@ -14,7 +14,8 @@
 			return;
 		}
 
-		windowObject = window.open('/', '', 'popup=true');
+		alert('opening');
+		windowObject = window.open('/dataviewer', '', 'popup=true');
 
 		window.setTimeout(() => {
 			windowObject?.postMessage('This is a message');
