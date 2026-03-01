@@ -100,7 +100,7 @@
 			return;
 		}
 
-		windowObject = window.open('/', '', 'popup=true');
+		windowObject = window.open('/dataviewer', '', 'popup=true');
 
 		window.setTimeout(() => {
 			windowObject?.postMessage(JSON.stringify(globalData.lines));
