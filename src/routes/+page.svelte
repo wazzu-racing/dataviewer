@@ -13,6 +13,13 @@
 	} from '$lib/layoutUtils';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
+
+	// --- Add new pane at reasonable location on click ---
+	function handleAddPane(type: PaneWidgetType) {
+		// Always add a pane, preserving existing panes (even if only one exists)
+		layout = ensureIds(insertPane(layout, layout.id, type, 'right'));
+	}
+
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
 	import LoadDataModal from '$lib/components/LoadDataModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -256,7 +263,7 @@
 <div class="flex flex-col h-screen w-full overflow-hidden bg-stone-100">
 	<TopBar openChildWindow={() => createChildWindow()} />
 	<div class="flex flex-1 overflow-hidden">
-		<PaneToolbar />
+		<PaneToolbar onAddPane={handleAddPane} />
 		<div class="relative flex-1 overflow-hidden">
 			<PaneLayout
 				{layout}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PaneWidgetType } from '$lib/types';
+	const { onAddPane }: { onAddPane?: (type: PaneWidgetType) => void } = $props();
 
 	type PaneTypeInfo = {
 		type: PaneWidgetType;
@@ -55,6 +56,9 @@
 		<button
 			draggable="true"
 			ondragstart={(e) => handleDragStart(e, type)}
+			onclick={() => {
+				onAddPane && onAddPane(type);
+			}}
 			title={label}
 			class="flex w-10 cursor-grab flex-col items-center justify-center gap-0.5 rounded p-1.5 text-stone-600 transition-colors active:cursor-grabbing {colorClass}"
 		>
