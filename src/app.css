@@ -1,1 +1,12 @@
 @import 'tailwindcss';
+
+/* Brute-force suppress all leaflet overlays when modal is open */
+.modal-open .leaflet-pane,
+.modal-open .leaflet-top,
+.modal-open .leaflet-bottom,
+.modal-open .leaflet-marker-icon,
+.modal-open .leaflet-popup,
+.modal-open .leaflet-tooltip {
+	z-index: 1 !important;
+	pointer-events: none !important;
+}

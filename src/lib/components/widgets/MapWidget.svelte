@@ -10,8 +10,15 @@
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let trackLine: any = null;
 
+	// HACK: compute if there is any usable GPS data, up front and after import
+	// (if there are any lines where lat/lon !== 0)
+	const hasData = $derived(
+		globalData.lines.length > 0 && globalData.lines.some((l) => l.lat !== 0 && l.lon !== 0)
+	);
+
+	// Only initialize the map if there is GPS data (prevents Leaflet artifacts with empty map)
 	$effect(() => {
-		if (!browser || !mapContainer) return;
+		if (!browser || !mapContainer || !hasData) return;
 
 		let cancelled = false;
 
@@ -33,6 +40,9 @@
 					attribution: '© OpenStreetMap contributors',
 					maxZoom: 19
 				}).addTo(leafletMap);
+				// Ensure the Leaflet pane/canvas is fully contained in mapContainer:
+				mapContainer!.style.overflow = 'hidden';
+				mapContainer!.style.position = 'relative';
 			}
 
 			// Draw/update the GPS track
@@ -93,12 +103,20 @@
 	});
 </script>
 
+<!--
+MapWidget "empty map" rendering bug fix:
+- Only run map+Leaflet if there is data
+- When no data, render only empty container and overlay (never calls Leaflet)
+- Keep overlays strictly above any map artifacts
+-->
 <div class="relative h-full w-full overflow-hidden">
+	<!-- Map container (Leaflet attaches here) -->
 	<div bind:this={mapContainer} class="h-full w-full"></div>
 
-	{#if globalData.lines.length === 0}
+	{#if !hasData}
 		<div
-			class="absolute inset-0 flex items-center justify-center bg-stone-50 text-sm text-stone-400"
+			class="absolute inset-0 flex items-center justify-center bg-stone-50 text-sm text-stone-400 z-10 pointer-events-auto"
+			style="z-index:10;"
 		>
 			No data loaded — use a Load Data pane to import a file
 		</div>

@@ -93,6 +93,16 @@
 	// Always prompt for data on every page load — telemetry is never persisted across sessions.
 	let showLoadDataModal: boolean = $state(true);
 
+	$effect(() => {
+		if (browser) {
+			if (showLoadDataModal) {
+				document.body.classList.add('modal-open');
+			} else {
+				document.body.classList.remove('modal-open');
+			}
+		}
+	});
+
 	// ---------------------------------------------------------------------------
 	// Window handling
 	// ---------------------------------------------------------------------------
@@ -144,7 +154,8 @@
 	console.log('IsChild is ' + isChild);
 	let layout: LayoutNode = $state(loadSavedLayout(isChild));
 	let floatingPanes: FloatingPaneState[] = $state(loadSavedFloatingPanes());
-	let topZ = $state(200);
+	// FloatingPane z-index convention: max 40 (modal = z-50, overlays = z-10)
+	let topZ = $state(30);
 
 	// ---------------------------------------------------------------------------
 	// Persist layout and floating pane positions on change
@@ -189,7 +200,7 @@
 		layout = updated ? ensureIds(updated) : workingLayout();
 
 		// Add as floating pane, centered in viewport
-		topZ += 1;
+		topZ = Math.min(topZ + 1, 40); // cap at 40
 		const w = 480;
 		const h = 340;
 		const x = browser ? Math.max(0, (window.innerWidth - w) / 2) : 100;
@@ -209,7 +220,7 @@
 	}
 
 	function handleFloatFocus(id: string) {
-		topZ += 1;
+		topZ = Math.min(topZ + 1, 40); // cap at 40
 		floatingPanes = floatingPanes.map((p) => (p.id === id ? { ...p, zIndex: topZ } : p));
 	}
 
