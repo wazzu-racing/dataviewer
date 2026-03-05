@@ -3,6 +3,9 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import '../app.css';
 
+	import { useRegisterSW } from 'virtual:pwa-register/svelte';
+	const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW();
+
 	let { children } = $props();
 </script>
 
