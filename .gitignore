@@ -24,3 +24,5 @@ vite.config.ts.timestamp-*
 
 # Generated Documentation
 docs/
+
+.harper-dictionary.txt
