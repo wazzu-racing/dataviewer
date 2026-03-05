@@ -48,9 +48,11 @@
 	"dependencies": {
 		"@neodrag/svelte": "^2.3.3",
 		"@tailwindcss/vite": "^4.1.18",
+		"@vite-pwa/sveltekit": "^1.1.0",
 		"leaflet": "^1.9.4",
 		"paneforge": "^1.0.2",
 		"tailwindcss": "^4.1.18",
-		"uplot": "^1.6.32"
+		"uplot": "^1.6.32",
+		"workbox-window": "^7.4.0"
 	}
 }
