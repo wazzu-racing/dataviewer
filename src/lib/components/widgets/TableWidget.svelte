@@ -65,26 +65,41 @@
 	};
 	const { config: _cfg, onConfigChange }: Props = $props();
 	const _seedColumns: Column[] = untrack(() => {
-		const saved = _cfg?.visibleColumns as Column[] | undefined;
+		const saved = (_cfg?.visibleColumns as string[] | undefined)?.filter((col): col is Column =>
+			ALL_COLUMNS.includes(col as Column)
+		);
 		return saved?.length ? saved : ['time', 'rpm', 'ground_speed', 'tps', 'afr', 'batt'];
 	});
 
 	// Default visible columns
 	let visibleColumns: Column[] = $state([..._seedColumns]);
+
+	// Guard: sync local state only when pane's config changes
+	$effect(() => {
+		if (_cfg?.visibleColumns && Array.isArray(_cfg.visibleColumns)) {
+			const filteredCols = _cfg.visibleColumns.filter((col): col is Column =>
+				ALL_COLUMNS.includes(col as Column)
+			);
+			if (!arrayEquals(visibleColumns, filteredCols)) {
+				visibleColumns = [...filteredCols];
+			}
+		}
+	});
+
+	function arrayEquals(a: Column[], b: Column[]): boolean {
+		return (
+			Array.isArray(a) &&
+			Array.isArray(b) &&
+			a.length === b.length &&
+			a.every((val, idx) => val === b[idx])
+		);
+	}
 	let showColumnPicker = $state(false);
 
 	// ---------------------------------------------------------------------------
 	// Config persistence — notify parent only after initial mount
 	// ---------------------------------------------------------------------------
 	let _configMounted = false;
-	$effect(() => {
-		const cfg: TableConfig = { visibleColumns: [...visibleColumns] };
-		if (!_configMounted) {
-			_configMounted = true;
-			return;
-		}
-		onConfigChange?.(cfg);
-	});
 
 	// Windowed rendering — only render rows within scroll viewport
 	const ROW_HEIGHT = 28; // px
@@ -112,10 +127,11 @@
 
 	function toggleColumn(col: Column) {
 		if (visibleColumns.includes(col)) {
-			if (visibleColumns.length > 1) visibleColumns = visibleColumns.filter((c) => c !== col);
+			visibleColumns = visibleColumns.filter((c) => c !== col);
 		} else {
 			visibleColumns = [...visibleColumns, col];
 		}
+		onConfigChange?.({ visibleColumns: [...visibleColumns] });
 	}
 </script>
 
