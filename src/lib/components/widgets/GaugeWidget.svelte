@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { data as globalData } from '$lib/data.svelte';
+	import { dataStore } from '$lib/stores/dataStore';
 	import type { DataLine, GaugeConfig } from '$lib/types';
+	import { timeIndexStore } from '$lib/stores/time';
 
 	const NUMERIC_FIELDS = [
 		'rpm',
@@ -103,12 +104,16 @@
 	// ---------------------------------------------------------------------------
 	// Derived values
 	// ---------------------------------------------------------------------------
-	const lastLine = $derived(globalData.lines.at(-1));
-	const currentValue = $derived(lastLine ? (lastLine[selectedField] as number) : null);
+	// Global index-based current line
+	const currentLine = $derived($timeIndexStore.currentLine);
+	const currentValue = $derived(currentLine ? (currentLine[selectedField] as number) : null);
+
 	const unit = $derived(FIELD_UNITS[selectedField] ?? '');
 
 	const allValues = $derived(
-		globalData.lines.length > 0 ? globalData.lines.map((l) => l[selectedField] as number) : []
+		$dataStore.telemetry.length > 0
+			? $dataStore.telemetry.map((l) => l[selectedField] as number)
+			: []
 	);
 	const minVal = $derived(allValues.length > 0 ? Math.min(...allValues) : 0);
 	const maxVal = $derived(allValues.length > 0 ? Math.max(...allValues) : 1);
@@ -170,7 +175,7 @@
 		{/each}
 	</select>
 
-	{#if globalData.lines.length === 0}
+	{#if $dataStore.telemetry.length === 0}
 		<p class="mt-4 text-sm text-stone-400">No data loaded</p>
 	{:else}
 		<!-- SVG arc gauge -->
@@ -197,7 +202,7 @@
 				fill="#1c1917"
 				font-family="monospace"
 			>
-				{currentValue !== null ? currentValue.toFixed(1) : '—'}
+				{typeof currentValue === 'number' && isFinite(currentValue) ? currentValue.toFixed(1) : '—'}
 			</text>
 			<!-- Unit label -->
 			{#if unit}
@@ -226,11 +231,11 @@
 			</text>
 			<!-- Min label (left end of arc) -->
 			<text x="14" y="118" text-anchor="middle" font-size="9" fill="#a8a29e">
-				{minVal.toFixed(1)}
+				{typeof minVal === 'number' && isFinite(minVal) ? minVal.toFixed(1) : '—'}
 			</text>
 			<!-- Max label (right end of arc) -->
 			<text x="186" y="118" text-anchor="middle" font-size="9" fill="#a8a29e">
-				{maxVal.toFixed(1)}
+				{typeof maxVal === 'number' && isFinite(maxVal) ? maxVal.toFixed(1) : '—'}
 			</text>
 		</svg>
 	{/if}

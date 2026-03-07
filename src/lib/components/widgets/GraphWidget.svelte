@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { data as globalData } from '$lib/data.svelte';
+	import { dataStore } from '$lib/stores/dataStore';
+	import { timeIndexStore } from '$lib/stores/time';
 	import type { DataLine, GraphConfig, XDisplayMode } from '$lib/types';
 	import { browser } from '$app/environment';
 	import { untrack } from 'svelte'; // still used by the xDisplayMode reset effect below
@@ -170,7 +171,7 @@
 	// graph, otherwise the chart-build $effect would re-run every time a new uPlot
 	// instance is assigned, which destroys the new chart and resets pan/zoom.
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let uplotInstance: any = null;
+	let uplotInstance: any = $state(null);
 	// Holds user-set y-zoom ranges keyed by scale name. Hoisted so resetView()
 	// and the button handler can clear it without being inside the $effect.
 	const manualYRanges = new Map<string, [number, number]>();
@@ -460,7 +461,7 @@
 		if (!browser || !container) return;
 
 		// Track reactive dependencies
-		const lines = globalData.lines;
+		const lines = $dataStore.telemetry;
 		const x = xField;
 		const ys = yFields;
 		const displayMode = xDisplayMode;
@@ -631,6 +632,54 @@
 	});
 
 	// ---------------------------------------------------------------------------
+	// Global time indicator pixel calculation (for overlay)
+	// ---------------------------------------------------------------------------
+	let timeIndicatorX = $state<number | null>(null);
+	$effect(() => {
+		if (!browser || !container || !uplotInstance) {
+			timeIndicatorX = null;
+			return;
+		}
+
+		const chartWidth = container.clientWidth ?? 0;
+		if (chartWidth <= 0) {
+			timeIndicatorX = null;
+			return;
+		}
+		const xScale = uplotInstance.scales.x;
+		if (!xScale || typeof xScale.min !== 'number' || typeof xScale.max !== 'number') {
+			timeIndicatorX = null;
+			return;
+		}
+
+		// Use currentLine from the global time index store
+		const currentLine = $timeIndexStore.currentLine;
+		let currentXValue: number | undefined = undefined;
+		if (currentLine && typeof currentLine[xField] === 'number') {
+			currentXValue = currentLine[xField];
+		}
+
+		if (typeof currentXValue !== 'number' || !isFinite(currentXValue)) {
+			timeIndicatorX = null;
+			return;
+		}
+
+		const xMin = xScale.min as number;
+		const xMax = xScale.max as number;
+		let px;
+		if (currentXValue < xMin) {
+			px = 0;
+		} else if (currentXValue > xMax) {
+			px = chartWidth - 1;
+		} else {
+			const frac = (currentXValue - xMin) / (xMax - xMin);
+			px = Math.round(frac * chartWidth);
+		}
+		// Clamp within chart width to avoid overflow
+		timeIndicatorX = Math.max(0, Math.min(px, chartWidth - 1));
+	});
+
+	// ---------------------------------------------------------------------------
 	// ResizeObserver — drives ALL sizing (initial + subsequent resizes).
 	// Observes the chart container div (below the controls bar).
 	// ---------------------------------------------------------------------------
@@ -739,8 +788,10 @@
 		</div>
 
 		<div class="ml-auto flex items-center gap-2">
-			{#if globalData.lines.length > 0}
-				<span class="text-xs text-stone-400">{globalData.lines.length.toLocaleString()} pts</span>
+			{#if $dataStore.telemetry.length > 0}
+				<span class="text-xs text-stone-400"
+					>{$dataStore.telemetry.length.toLocaleString()} pts</span
+				>
 				<button
 					onclick={resetView}
 					class="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-600 hover:bg-stone-50 active:bg-stone-100"
@@ -754,7 +805,7 @@
 
 	<!-- uPlot mount point + tooltip overlay -->
 	<div bind:this={container} class="relative min-h-0 flex-1 overflow-hidden">
-		{#if globalData.lines.length === 0}
+		{#if $dataStore.telemetry.length === 0}
 			<div class="flex h-full items-center justify-center text-sm text-stone-400">
 				No data loaded — use a Load Data pane to import a file
 			</div>
@@ -762,6 +813,51 @@
 
 		<!-- uPlot renders here; absolutely fills container so it doesn't affect layout measurement -->
 		<div bind:this={chartMount} class="absolute inset-0"></div>
+
+		<!-- Global time indicator overlay -->
+		<!--
+		Global Time Indicator Overlay
+		- Renders a vertical line at pixel position corresponding to global time index.
+		- Shows pill overlay above line with formatted value.
+		- Both line and pill are visible unless timeIndicatorX === null (uncomputable).
+		- OOB values clamp indicator to chart edge (left/right).
+		-->
+		{#if timeIndicatorX !== null}
+			<div
+				class="pointer-events-none absolute top-0 h-full w-[2px] z-20 bg-fuchsia-500 opacity-70"
+				style="left:{timeIndicatorX}px"
+				aria-label="Global Time Indicator"
+			></div>
+
+			<!-- Pill overlay for indicator label -->
+			<div
+				class="pointer-events-none absolute z-30 px-2 py-0.5 rounded-full bg-fuchsia-200 text-fuchsia-700 text-xs font-medium shadow-md border border-fuchsia-400 select-none"
+				style="left:{timeIndicatorX}px; top:8px; transform:translateX(-50%)"
+				aria-label="Indicator Value Label"
+			>
+				{(() => {
+					// Show value at current global index for selected xField; format for time-like, else show raw.
+					const currentLine = $timeIndexStore.currentLine;
+					const val =
+						currentLine && typeof currentLine[xField] === 'number' ? currentLine[xField] : null;
+					if (val == null || isNaN(val)) return '—';
+					if (isTimeField(xField)) {
+						if (xDisplayMode === 'absolute') {
+							const epoch =
+								currentLine && currentLine.unixtime ? currentLine.unixtime : new Date(0);
+							return formatAbsolute(val, epoch, val);
+						} else if (xDisplayMode === 'relative') {
+							return formatRelative(val);
+						} else {
+							return val.toFixed(3);
+						}
+					} else {
+						// Non-time field: show raw numeric value
+						return val.toFixed(3);
+					}
+				})()}
+			</div>
+		{/if}
 
 		<!-- Tooltip overlay -->
 		{#if tooltipVisible}

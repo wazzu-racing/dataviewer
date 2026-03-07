@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { data as globalData } from '$lib/data.svelte';
+	import { dataStore } from '$lib/stores/dataStore';
 	import { browser } from '$app/environment';
 	import { loadLeaflet } from '$lib/leaflet';
+	import { timeIndexStore } from '$lib/stores/time';
 
 	let mapContainer: HTMLDivElement | undefined = $state();
 	// Plain variables — not reactive state; only used inside effects, never in template
@@ -13,7 +14,7 @@
 	// HACK: compute if there is any usable GPS data, up front and after import
 	// (if there are any lines where lat/lon !== 0)
 	const hasData = $derived(
-		globalData.lines.length > 0 && globalData.lines.some((l) => l.lat !== 0 && l.lon !== 0)
+		$dataStore.telemetry.length > 0 && $dataStore.telemetry.some((l) => l.lat !== 0 && l.lon !== 0)
 	);
 
 	// Only initialize the map if there is GPS data (prevents Leaflet artifacts with empty map)
@@ -46,7 +47,7 @@
 			}
 
 			// Draw/update the GPS track
-			const lines = globalData.lines;
+			const lines = $dataStore.telemetry;
 			if (lines.length === 0) return;
 
 			const coords: [number, number][] = lines
@@ -90,6 +91,53 @@
 				trackLine = null;
 			}
 		};
+	});
+
+	// Global time position marker
+	let timeMarker: any = null;
+	$effect(() => {
+		if (!browser || !leafletMap || !hasData) {
+			if (timeMarker) {
+				leafletMap.removeLayer(timeMarker);
+				timeMarker = null;
+			}
+			return;
+		}
+		const lines = $dataStore.telemetry.filter(
+			(l) => l.lat !== 0 && l.lon !== 0 && typeof l.time === 'number'
+		);
+		const idx = $timeIndexStore.selectedIndex;
+		const line = $dataStore.telemetry[idx];
+		if (
+			!line ||
+			typeof line.lat !== 'number' ||
+			typeof line.lon !== 'number' ||
+			line.lat === 0 ||
+			line.lon === 0
+		) {
+			if (timeMarker) {
+				leafletMap.removeLayer(timeMarker);
+				timeMarker = null;
+			}
+			return;
+		}
+
+		if (timeMarker) {
+			leafletMap.removeLayer(timeMarker);
+			timeMarker = null;
+		}
+		// draw marker
+		const lat = line.lat;
+		const lon = line.lon;
+		timeMarker = L.circleMarker([lat, lon], {
+			radius: 7,
+			color: '#e11d48', // fuchsia-600
+			fillColor: '#e11d48',
+			fillOpacity: 0.85,
+			weight: 3
+		}).addTo(leafletMap);
+		// Optionally, we could pan to marker:
+		// leafletMap.panTo([lat, lon]);
 	});
 
 	// Invalidate map size when container resizes
