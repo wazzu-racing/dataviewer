@@ -112,7 +112,11 @@
 
 	const allValues = $derived(
 		$dataStore.telemetry.length > 0
-			? $dataStore.telemetry.map((l) => l[selectedField] as number)
+			? $dataStore.telemetry
+					.map((l) => l[selectedField] as number)
+					.filter(
+						(v) => typeof v === 'number' && isFinite(v) && v !== null && v !== undefined && v > 0
+					) // Exclude zeros/nulls/NaN
 			: []
 	);
 	const minVal = $derived(allValues.length > 0 ? Math.min(...allValues) : 0);
@@ -132,10 +136,16 @@
 	const CY = 100;
 	const R = 80;
 
-	/** Convert polar angle (degrees, 0 = right / 3 o'clock) to SVG cartesian coords. */
+	/**
+	 * Convert polar angle to SVG cartesian coords.
+	 * 0° = 3 o'clock (right)
+	 * 90° = 12 o'clock (top)
+	 * 180° = 9 o'clock (left)
+	 * 270° = 6 o'clock (bottom)
+	 */
 	function polar(cx: number, cy: number, r: number, angleDeg: number): [number, number] {
-		const rad = ((angleDeg - 90) * Math.PI) / 180;
-		return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
+		const rad = (angleDeg * Math.PI) / 180;
+		return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
 	}
 
 	/**
@@ -144,24 +154,31 @@
 	 * The gauge sweeps from 180° (left) to 0° (right) — i.e. startAngle=180, endAngle=0
 	 * mapped to the convention where 270° = left and 90° = right.
 	 */
-	function arcPath(startDeg: number, endDeg: number): string {
-		// Map gauge degrees (0 = left, 180 = right) → SVG polar degrees
-		// Gauge 0° → SVG 270° (left), Gauge 180° → SVG 90° (right)
-		const svgStart = 270 - startDeg; // startDeg=0 → 270 (left)
-		const svgEnd = 270 - endDeg; // endDeg=180 → 90 (right)
-		const [x1, y1] = polar(CX, CY, R, svgStart);
-		const [x2, y2] = polar(CX, CY, R, svgEnd);
-		const sweep = endDeg - startDeg;
-		const largeArc = sweep > 180 ? 1 : 0;
-		// Clockwise sweep direction = 1 (SVG positive direction)
-		return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${R} ${R} 0 ${largeArc} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`;
+	function arcPath(startDeg: number, endDeg: number, pct: number): string {
+		const [x1, y1] = polar(CX, CY, R, startDeg);
+		const [x2, y2] = polar(CX, CY, R, endDeg);
+		const sweepFlag = 1;
+		const largeArcFlag = pct > 0.5 ? 1 : 0;
+		return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${R} ${R} 0 ${largeArcFlag} ${sweepFlag} ${x2.toFixed(3)} ${y2.toFixed(3)}`;
 	}
 
 	// Track arc: full 180° sweep
-	const trackPath = $derived(arcPath(0, 180));
-	// Fill arc: proportional to barPct — only computed/rendered when value is above minimum
-	const fillDeg = $derived(barPct * 180);
-	const fillPath = $derived(fillDeg > 0 ? arcPath(0, fillDeg) : null);
+	// Track arc: full 180° sweep from left (9 o'clock/180°) to right (3 o'clock/0°)
+	const trackPath = $derived(arcPath(180, 0, 1)); // Full sweep, barPct=1
+
+	const fillEndDeg = $derived(180 * barPct);
+	const fillPath = $derived(
+		(() => {
+			// if (barPct === 0) return '';
+			const x1 = CX - R;
+			const y1 = CY;
+			const x2 = CX - R * Math.cos(fillEndDeg * (Math.PI / 180));
+			const y2 = CY - R * Math.sin(fillEndDeg * (Math.PI / 180));
+
+			// Pie segment path: move to point, then draw arc.
+			return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${R} ${R} 0 0 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`;
+		})()
+	); // Pie segment for fill arc
 </script>
 
 <div class="flex h-full w-full flex-col items-center justify-start gap-2 p-3">
@@ -179,18 +196,17 @@
 		<p class="mt-4 text-sm text-stone-400">No data loaded</p>
 	{:else}
 		<!-- SVG arc gauge -->
+		<!-- was 120 height -->
 		<svg
-			viewBox="0 0 200 120"
+			viewBox="0 0 210 120"
 			class="w-full max-w-xs"
 			aria-label="{prettyLabel(selectedField)} gauge"
 			role="img"
 		>
 			<!-- Background track arc -->
 			<path d={trackPath} fill="none" stroke="#e7e5e4" stroke-width="18" stroke-linecap="round" />
-			<!-- Value fill arc — only rendered when value is above minimum -->
-			{#if fillPath}
-				<path d={fillPath} fill="none" stroke="#3b82f6" stroke-width="18" stroke-linecap="round" />
-			{/if}
+			<!-- Value fill arc -->
+			<path d={fillPath} fill="none" stroke="#3b82f6" stroke-width="18" stroke-linecap="round" />
 			<!-- Current value (large, centered) -->
 			<text
 				x={CX}
