@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { data as globalData } from '$lib/data.svelte';
+	import { timeIndexStore } from '$lib/stores/time';
 	import type { DataLine, TableConfig } from '$lib/types';
 
 	// All displayable columns (everything except unixtime)
@@ -105,6 +106,38 @@
 	const ROW_HEIGHT = 28; // px
 	const BUFFER = 10;
 
+	// Compute nearest row to global time
+	let nearestRowIdx = $state<number | null>(null);
+	$effect(() => {
+		const idx = $timeIndexStore.selectedIndex;
+		const linesArr = globalData.lines;
+		if (!linesArr || linesArr.length === 0 || typeof idx !== 'number') {
+			nearestRowIdx = null;
+			return;
+		}
+		nearestRowIdx = idx;
+	});
+
+	// Scroll nearest row into view when changed and if visible
+	$effect(() => {
+		if (nearestRowIdx === null || !scrollContainer || globalData.lines.length === 0) return;
+		// If nearestRowIdx is currently visible, scroll to it
+		const rowTop = nearestRowIdx * ROW_HEIGHT;
+		const rowBottom = rowTop + ROW_HEIGHT;
+		const visibleTop = scrollContainer.scrollTop;
+		const visibleBottom = visibleTop + scrollContainer.clientHeight;
+		if (rowTop < visibleTop || rowBottom > visibleBottom) {
+			// ---
+			// Instantly jump-scroll scrollContainer to nearestRowIdx when global time changes.
+			// 'auto' disables animation and ensures immediate scroll-to-row, fixing prior delay.
+			// ---
+			scrollContainer.scrollTo({
+				top: Math.max(0, rowTop - Math.floor(scrollContainer.clientHeight / 2)),
+				behavior: 'auto' // Set to 'auto' for instant scroll
+			});
+		}
+	});
+
 	let scrollContainer: HTMLDivElement | undefined = $state();
 	let scrollTop = $state(0);
 
@@ -192,10 +225,13 @@
 				<div style="transform: translateY({offsetY}px);">
 					{#each visibleRows as row, i (startIdx + i)}
 						<div
-							class="flex border-b border-stone-100 hover:bg-blue-50 {(startIdx + i) % 2 === 0
-								? ''
-								: 'bg-stone-50'}"
+							class="flex border-b border-stone-100 hover:bg-blue-50 {nearestRowIdx === startIdx + i
+								? 'bg-fuchsia-100 font-bold ring-2 ring-fuchsia-400'
+								: (startIdx + i) % 2 === 0
+									? ''
+									: 'bg-stone-50'}"
 							style="height:{ROW_HEIGHT}px;"
+							aria-label={nearestRowIdx === startIdx + i ? 'Global time row' : undefined}
 						>
 							<div class="w-14 shrink-0 px-2 py-1 text-stone-400">{startIdx + i}</div>
 							{#each visibleColumns as col (col)}
