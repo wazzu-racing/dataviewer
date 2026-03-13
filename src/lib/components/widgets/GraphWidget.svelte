@@ -252,119 +252,142 @@
 	// ---------------------------------------------------------------------------
 	// Build uPlot and attach interactions
 	// ---------------------------------------------------------------------------
+	let plotlyLib: any = $state(null);
+
 	onMount(() => {
 		if (!browser) return;
 		(async () => {
-			let Plotly: any;
 			try {
-				Plotly = (await import('plotly.js-dist-min')).default;
+				plotlyLib = (await import('plotly.js-dist-min')).default;
 			} catch (e) {
 				console.error('Plotly import failed:', e);
-				return;
 			}
+		})();
+	});
 
-			function renderChart() {
-				if (!chartMount || !$dataStore.telemetry.length) return;
-				const lines = $dataStore.telemetry;
-				const x = xField;
-				const ys = yFields;
-				const displayMode = xDisplayMode;
+	$effect(() => {
+		console.log(
+			'[GraphWidget effect] browser:',
+			browser,
+			'plotlyLib:',
+			plotlyLib,
+			'chartMount:',
+			chartMount,
+			'telemetry:',
+			$dataStore.telemetry.length,
+			'x:',
+			xField,
+			'y:',
+			yFields
+		);
+		if (!browser) return;
+		if (!plotlyLib) return;
+		if (!chartMount) return;
+		if (!$dataStore.telemetry.length) return;
 
-				const xs: number[] = [];
-				const yArrays: number[][] = ys.map(() => []);
-				const unixtimes: Date[] = [];
-				for (const line of lines) {
-					xs.push(line[x] as number);
-					unixtimes.push(line.unixtime);
-					for (let i = 0; i < ys.length; i++) {
-						yArrays[i].push(line[ys[i]] as number);
-					}
+		const lines = $dataStore.telemetry;
+		const x = xField;
+		const ys = yFields;
+		const displayMode = xDisplayMode;
+
+		const xs: number[] = [];
+		const yArrays: number[][] = ys.map(() => []);
+		const unixtimes: Date[] = [];
+		for (const line of lines) {
+			xs.push(line[x] as number);
+			unixtimes.push(line.unixtime);
+			for (let i = 0; i < ys.length; i++) {
+				yArrays[i].push(line[ys[i]] as number);
+			}
+		}
+		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
+		const sortedXs = order.map((i) => xs[i]);
+		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
+		const epochDate = unixtimes[order[0]] ?? new Date(0);
+		const firstMs = sortedXs[0] ?? 0;
+
+		const formatXValue = (val: number): string => {
+			if (displayMode === 'relative') return formatRelative(val - firstMs);
+			if (displayMode === 'absolute') return formatAbsolute(val, epochDate, firstMs);
+			return val.toFixed(3);
+		};
+
+		const traces = sortedYs.map((ysArr, i) => {
+			const axis = i === 0 ? 'y' : 'y2';
+			return {
+				x: sortedXs,
+				y: ysArr,
+				type: 'scattergl',
+				mode: 'lines',
+				name: prettyLabel(ys[i]),
+				line: { color: SERIES_COLORS[i % SERIES_COLORS.length], width: 1.5 },
+				hoverinfo: 'x+y+name',
+				yaxis: axis
+			};
+		});
+
+		const layout: any = {
+			margin: { l: 40, r: 40, t: 16, b: 40 },
+			legend: { orientation: 'h', y: -0.2 },
+			xaxis: {
+				title: prettyLabel(x),
+				showgrid: true
+			},
+			yaxis: {
+				title: prettyLabel(ys[0]),
+				showgrid: true,
+				color: SERIES_COLORS[0]
+			},
+			showlegend: false,
+			dragmode: 'pan'
+		};
+
+		if (ys.length > 1) {
+			layout.yaxis2 = {
+				title: prettyLabel(ys.slice(1).join(', ')),
+				showgrid: false,
+				overlaying: 'y',
+				side: 'right',
+				color: SERIES_COLORS[1]
+			};
+		}
+
+		plotlyLib.react(chartMount, traces, layout, { responsive: true });
+		plotlyInstance = chartMount;
+
+		// Attach overlays/events after render (reuse logic as before)
+		function attachTooltipEvents() {
+			if (!plotlyInstance || !chartMount) return;
+			const chartEl = chartMount;
+			const hoverHandler = (event: any) => {
+				if (event && event.points && event.points.length > 0) {
+					const pt = event.points[0];
+					tooltipVisible = true;
+					const chartWidth = container?.clientWidth ?? 0;
+					tooltipFlipped = pt.xpx > chartWidth / 2;
+					tooltipX = tooltipFlipped ? pt.xpx - 16 : pt.xpx + 16;
+					tooltipY = pt.ypx;
+					tooltipXLabel = pt.xaxis.title.text ?? prettyLabel(xField);
+					tooltipXValue = pt.x != null ? pt.x.toFixed(3) : '—';
+					tooltipEntries = yFields.map((field, i) => ({
+						label: prettyLabel(field),
+						value: pt.y != null ? pt.y.toFixed(3) : '—',
+						color: SERIES_COLORS[i % SERIES_COLORS.length]
+					}));
 				}
-				const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
-				const sortedXs = order.map((i) => xs[i]);
-				const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
-				const epochDate = unixtimes[order[0]] ?? new Date(0);
-				const firstMs = sortedXs[0] ?? 0;
-
-				const formatXValue = (val: number): string => {
-					if (displayMode === 'relative') return formatRelative(val - firstMs);
-					if (displayMode === 'absolute') return formatAbsolute(val, epochDate, firstMs);
-					return val.toFixed(3);
-				};
-
-				const traces = sortedYs.map((ysArr, i) => ({
-					x: sortedXs,
-					y: ysArr,
-					type: 'scattergl',
-					mode: 'lines',
-					name: prettyLabel(ys[i]),
-					line: { color: SERIES_COLORS[i % SERIES_COLORS.length], width: 1.5 },
-					hoverinfo: 'x+y+name'
-				}));
-
-				const layout = {
-					margin: { l: 40, r: 16, t: 16, b: 40 },
-					legend: { orientation: 'h', y: -0.2 },
-					xaxis: {
-						title: prettyLabel(x),
-						showgrid: true
-					},
-					yaxis: {
-						title: ys.length === 1 ? prettyLabel(ys[0]) : undefined,
-						showgrid: true
-					},
-					showlegend: false,
-					dragmode: 'pan'
-				};
-
-				Plotly.react(chartMount, traces, layout, { responsive: true });
-				plotlyInstance = chartMount;
-				// Tooltip/event overlays as before
-				attachTooltipEvents();
-			}
-
-			function attachTooltipEvents() {
-				if (!plotlyInstance || !chartMount) return;
-				const chartEl = chartMount;
-				const hoverHandler = (event: any) => {
-					if (event && event.points && event.points.length > 0) {
-						const pt = event.points[0];
-						tooltipVisible = true;
-						const chartWidth = container?.clientWidth ?? 0;
-						tooltipFlipped = pt.xpx > chartWidth / 2;
-						tooltipX = tooltipFlipped ? pt.xpx - 16 : pt.xpx + 16;
-						tooltipY = pt.ypx;
-						tooltipXLabel = pt.xaxis.title.text ?? prettyLabel(xField);
-						tooltipXValue = pt.x != null ? pt.x.toFixed(3) : '—';
-						tooltipEntries = yFields.map((field, i) => ({
-							label: prettyLabel(field),
-							value: pt.y != null ? pt.y.toFixed(3) : '—',
-							color: SERIES_COLORS[i % SERIES_COLORS.length]
-						}));
-					}
-				};
-				const unhoverHandler = () => {
-					tooltipVisible = false;
-				};
-				chartEl.addEventListener('plotly_hover', hoverHandler);
-				chartEl.addEventListener('plotly_unhover', unhoverHandler);
-				plotlyInstance._detachPlotlyTooltip = () => {
-					chartEl.removeEventListener('plotly_hover', hoverHandler);
-					chartEl.removeEventListener('plotly_unhover', unhoverHandler);
-				};
-			}
-
-			renderChart();
-			// Cleanup function for onMount
-			return () => {
-				if (plotlyInstance && plotlyInstance._detachPlotlyTooltip) {
-					plotlyInstance._detachPlotlyTooltip();
-					Plotly.purge(chartMount);
-					plotlyInstance = null;
-				}
+			};
+			const unhoverHandler = () => {
 				tooltipVisible = false;
 			};
-		})();
+			chartEl.addEventListener('plotly_hover', hoverHandler);
+			chartEl.addEventListener('plotly_unhover', unhoverHandler);
+			plotlyInstance._detachPlotlyTooltip = () => {
+				chartEl.removeEventListener('plotly_hover', hoverHandler);
+				chartEl.removeEventListener('plotly_unhover', unhoverHandler);
+			};
+		}
+
+		attachTooltipEvents();
 	});
 
 	// Global time indicator pixel calculation (for overlay)
