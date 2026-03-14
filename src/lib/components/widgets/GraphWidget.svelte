@@ -2,11 +2,12 @@
 	import { dataStore } from '$lib/stores/dataStore';
 	import { timeIndexStore } from '$lib/stores/time';
 	import type { DataLine, GraphConfig, XDisplayMode } from '$lib/types';
-	import { browser } from '$app/environment';
-	import { untrack } from 'svelte'; // still used by the xDisplayMode reset effect below
-	import 'uplot/dist/uPlot.min.css';
+	import { browser, dev } from '$app/environment';
+	import { untrack, onMount } from 'svelte'; // onMount is used for browser-only Plotly integration
+	// Plotly import moved to browser-only lifecycle below
 	import { isTimeField, formatRelative, formatAbsolute } from '$lib/timeFormat';
 
+	// Plotly will be used for chart rendering.
 	// ---------------------------------------------------------------------------
 	// All numeric (plottable) keys from DataLine — excludes 'unixtime' (Date)
 	// Must be defined before Props so NumericField type is available
@@ -63,6 +64,54 @@
 
 	type NumericField = (typeof NUMERIC_FIELDS)[number];
 
+	// Helper: Compute time indicator shape for Plotly layout
+	function getTimeIndicatorShape(
+		x: NumericField,
+		ys: NumericField[],
+		currentLine: DataLine | undefined | null
+	) {
+		if (!currentLine) return null;
+		if (isTimeField(x)) {
+			const v = currentLine[x];
+			if (typeof v === 'number' && isFinite(v)) {
+				return {
+					type: 'line',
+					xref: 'x',
+					yref: 'paper',
+					x0: v,
+					x1: v,
+					y0: 0,
+					y1: 1,
+					line: {
+						color: 'rgba(236, 72, 153, 0.85)',
+						width: 2
+					}
+				};
+			}
+		} else if (Array.isArray(ys)) {
+			const timeYField = ys.find(isTimeField);
+			if (timeYField) {
+				const v = currentLine[timeYField];
+				if (typeof v === 'number' && isFinite(v)) {
+					return {
+						type: 'line',
+						xref: 'paper',
+						yref: 'y',
+						x0: 0,
+						x1: 1,
+						y0: v,
+						y1: v,
+						line: {
+							color: 'rgba(236, 72, 153, 0.85)',
+							width: 2
+						}
+					};
+				}
+			}
+		}
+		return null;
+	}
+
 	// ---------------------------------------------------------------------------
 	// Color palette for multi-series
 	// ---------------------------------------------------------------------------
@@ -102,6 +151,33 @@
 
 	// ---------------------------------------------------------------------------
 	// Widget state — seeded once from persisted config
+	// Margin zoom highlight state and axis margin pointer handlers
+	let zoomMarginHover: 'left' | 'right' | 'bottom' | null = $state(null);
+
+	function onPointerMoveMarginZoom(e: PointerEvent) {
+		if (!e.shiftKey || !container) {
+			zoomMarginHover = null;
+			return;
+		}
+		const margin = 24;
+		const rect = container.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const y = e.clientY - rect.top;
+		if (x < margin) {
+			zoomMarginHover = 'left';
+		} else if (y > rect.height - margin) {
+			zoomMarginHover = 'bottom';
+		} else if (yFields.length > 1 && x > rect.width - margin) {
+			zoomMarginHover = 'right';
+		} else {
+			zoomMarginHover = null;
+		}
+	}
+
+	function onPointerLeaveMarginZoom() {
+		zoomMarginHover = null;
+	}
+
 	// ---------------------------------------------------------------------------
 	let xField: NumericField = $state(_seedX);
 	let yFields: NumericField[] = $state([..._seedY]);
@@ -151,7 +227,7 @@
 	}
 
 	// ---------------------------------------------------------------------------
-	// Tooltip state (updated by uPlot setCursor hook)
+	// Tooltip state
 	// ---------------------------------------------------------------------------
 	type TooltipEntry = { label: string; value: string; color: string };
 	let tooltipVisible = $state(false);
@@ -163,18 +239,11 @@
 	let tooltipEntries: TooltipEntry[] = $state([]);
 
 	// ---------------------------------------------------------------------------
-	// uPlot refs
+	// Plotly refs
 	// ---------------------------------------------------------------------------
 	let container: HTMLDivElement | undefined = $state(); // chart-area div (below controls bar)
-	let chartMount: HTMLDivElement | undefined = $state(); // inner absolute div uPlot renders into
-	// Plain let (not $state) — mutations must not feed back into Svelte's reactive
-	// graph, otherwise the chart-build $effect would re-run every time a new uPlot
-	// instance is assigned, which destroys the new chart and resets pan/zoom.
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let uplotInstance: any = $state(null);
-	// Holds user-set y-zoom ranges keyed by scale name. Hoisted so resetView()
-	// and the button handler can clear it without being inside the $effect.
-	const manualYRanges = new Map<string, [number, number]>();
+	let chartMount: HTMLDivElement | undefined = $state(); // Plotly chart mount
+	let plotlyInstance: any = $state(null); // Plotly chart reference
 
 	/** Returns the pixel dimensions available for the chart. */
 	function plotSize(): { width: number; height: number } {
@@ -219,476 +288,369 @@
 	}
 
 	// ---------------------------------------------------------------------------
-	// Zoom / pan helpers (operate on uPlot x scale)
-	// ---------------------------------------------------------------------------
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	function getXRange(u: any): [number, number] {
-		const scaleMin = u.scales.x.min as number | null;
-		const scaleMax = u.scales.x.max as number | null;
-		if (scaleMin != null && scaleMax != null && isFinite(scaleMin) && isFinite(scaleMax)) {
-			return [scaleMin, scaleMax];
-		}
-		// Fall back to the full data extent when the scale hasn't been initialised yet
-		// or has been corrupted by a NaN setScale call.
-		const xData = u.data[0] as number[];
-		return [xData[0], xData[xData.length - 1]];
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	function getYRange(u: any, scaleKey: string): [number, number] {
-		const s = u.scales[scaleKey];
-		if (s && isFinite(s.min) && isFinite(s.max)) return [s.min as number, s.max as number];
-		// Fallback: compute from series data
-		const seriesIdx = (u.series as { scale?: string }[]).findIndex((sr) => sr.scale === scaleKey);
-		if (seriesIdx > 0) {
-			const yData = (u.data[seriesIdx] as number[]).filter(isFinite);
-			if (yData.length > 0)
-				return yData.reduce(
-					([lo, hi], v) => [v < lo ? v : lo, v > hi ? v : hi],
-					[yData[0], yData[0]]
-				);
-		}
-		return [0, 1];
-	}
-
-	function detectAxisZone(
-		clientX: number,
-		clientY: number,
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		u: any,
-		wrap: HTMLElement
-	): 'x' | `y${number}` | 'plot' {
-		const over = wrap.querySelector('.u-over') as HTMLElement | null;
-		if (over) {
-			const r = over.getBoundingClientRect();
-			if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom)
-				return 'plot';
-		}
-		const axisEls = wrap.querySelectorAll('.u-axis');
-		for (let i = 0; i < axisEls.length; i++) {
-			const r = axisEls[i].getBoundingClientRect();
-			if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
-				// u.axes[0] is the x-axis, u.axes[1..n] are y0, y1, ...
-				const scale = (u.axes as { scale?: string }[])[i]?.scale ?? 'x';
-				return scale as 'x' | `y${number}`;
-			}
-		}
-		return 'plot';
-	}
-
-	function attachWheelZoom(
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		u: any,
-		wrap: HTMLElement,
-		manualYRanges: Map<string, [number, number]>
-	) {
-		function onWheel(e: WheelEvent) {
-			e.preventDefault();
-			const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-
-			// Use the inner plot overlay rect as the reference for cursor-pivot fractions.
-			const over = wrap.querySelector('.u-over') as HTMLElement | null;
-			const overRect = over?.getBoundingClientRect() ?? wrap.getBoundingClientRect();
-
-			// Horizontal fraction (0 = left edge, 1 = right edge)
-			const xFrac = Math.max(0, Math.min(1, (e.clientX - overRect.left) / overRect.width));
-			// Vertical fraction (0 = bottom, 1 = top) — matches data coordinates direction
-			const yFrac = 1 - Math.max(0, Math.min(1, (e.clientY - overRect.top) / overRect.height));
-
-			const zone = e.shiftKey ? detectAxisZone(e.clientX, e.clientY, u, wrap) : 'plot';
-
-			const zoomX = zone === 'plot' || zone === 'x';
-			const zoomY = zone === 'plot';
-			const zoomSpecificY = zone !== 'plot' && zone !== 'x' ? zone : null;
-
-			if (zoomX) {
-				const [min, max] = getXRange(u);
-				const span = max - min;
-				const pivot = min + xFrac * span;
-				u.setScale('x', {
-					min: pivot - xFrac * span * factor,
-					max: pivot + (1 - xFrac) * span * factor
-				});
-			}
-
-			if (zoomY) {
-				// Zoom all y-scales
-				const yScaleKeys = Object.keys(u.scales as Record<string, unknown>).filter((k) =>
-					k.startsWith('y')
-				);
-				for (const key of yScaleKeys) {
-					const [yMin, yMax] = getYRange(u, key);
-					const ySpan = yMax - yMin;
-					const pivot = yMin + yFrac * ySpan;
-					const newMin = pivot - yFrac * ySpan * factor;
-					const newMax = pivot + (1 - yFrac) * ySpan * factor;
-					manualYRanges.set(key, [newMin, newMax]);
-					u.setScale(key, { min: newMin, max: newMax });
-				}
-			} else if (zoomSpecificY) {
-				const [yMin, yMax] = getYRange(u, zoomSpecificY);
-				const ySpan = yMax - yMin;
-				const pivot = yMin + yFrac * ySpan;
-				const newMin = pivot - yFrac * ySpan * factor;
-				const newMax = pivot + (1 - yFrac) * ySpan * factor;
-				manualYRanges.set(zoomSpecificY, [newMin, newMax]);
-				u.setScale(zoomSpecificY, { min: newMin, max: newMax });
-			}
-		}
-		wrap.addEventListener('wheel', onWheel, { passive: false });
-		return () => wrap.removeEventListener('wheel', onWheel);
-	}
-
-	function attachPan(
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		u: any,
-		el: HTMLElement,
-		manualYRanges: Map<string, [number, number]>
-	) {
-		let dragging = false;
-		let startX = 0;
-		let startY = 0;
-		let startMin = 0;
-		let startMax = 0;
-		// Snapshot of all y-scale ranges at drag start, keyed by scale name
-		let startYRanges = new Map<string, [number, number]>();
-
-		function onMouseDown(e: MouseEvent) {
-			// Only left button
-			if (e.button !== 0) return;
-			dragging = true;
-			startX = e.clientX;
-			startY = e.clientY;
-			[startMin, startMax] = getXRange(u);
-			startYRanges = new Map(
-				Object.keys(u.scales as Record<string, unknown>)
-					.filter((k) => k.startsWith('y'))
-					.map((k) => [k, getYRange(u, k)] as [string, [number, number]])
-			);
-		}
-
-		function onMouseMove(e: MouseEvent) {
-			if (!dragging) return;
-			const rect = el.getBoundingClientRect();
-
-			// Pan x
-			const xSpan = startMax - startMin;
-			const pxWidth = rect.width;
-			if (pxWidth > 0) {
-				const dx = e.clientX - startX;
-				const dValX = (dx / pxWidth) * xSpan;
-				u.setScale('x', { min: startMin - dValX, max: startMax - dValX });
-			}
-
-			// Pan y — only when at least one y-scale had a manual range at drag start
-			if (startYRanges.size > 0) {
-				const pxHeight = rect.height;
-				if (pxHeight > 0) {
-					const dy = e.clientY - startY;
-					for (const [key, [yMin, yMax]] of startYRanges) {
-						const ySpan = yMax - yMin;
-						// dy > 0 means cursor moved down → data shifts up → increase min/max
-						const dValY = (dy / pxHeight) * ySpan;
-						const newMin = yMin + dValY;
-						const newMax = yMax + dValY;
-						manualYRanges.set(key, [newMin, newMax]);
-						u.setScale(key, { min: newMin, max: newMax });
-					}
-				}
-			}
-		}
-
-		function onMouseUp() {
-			dragging = false;
-		}
-
-		el.addEventListener('mousedown', onMouseDown);
-		window.addEventListener('mousemove', onMouseMove);
-		window.addEventListener('mouseup', onMouseUp);
-
-		return () => {
-			el.removeEventListener('mousedown', onMouseDown);
-			window.removeEventListener('mousemove', onMouseMove);
-			window.removeEventListener('mouseup', onMouseUp);
-		};
-	}
-
-	// Resets all manual y-zoom and x-zoom, restoring the full auto-fit view.
-	// Safe to call at any time; no-ops if no plot is mounted yet.
-	function resetView() {
-		if (!uplotInstance) return;
-		manualYRanges.clear();
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const xData: any[] = uplotInstance.data[0];
-		if (xData && xData.length > 0) {
-			// setScale triggers uPlot's full redraw pipeline (including the y range
-			// callbacks), so we do NOT call redraw() separately — that would
-			// overwrite the scale we just set.
-			uplotInstance.setScale('x', { min: xData[0], max: xData[xData.length - 1] });
-		} else {
-			// No x data — just redraw so Y auto-fit kicks in via the range callbacks.
-			uplotInstance.redraw();
-		}
-	}
-
-	// Double-click on the plot area resets the view (both axes).
-	// Suppressed when the double-click is the tail end of a drag (displacement > 4px).
-	function attachDoubleClickReset(el: HTMLElement) {
-		let downX = 0;
-		let downY = 0;
-		function onMouseDown(e: MouseEvent) {
-			downX = e.clientX;
-			downY = e.clientY;
-		}
-		function onDblClick(e: MouseEvent) {
-			const dx = e.clientX - downX;
-			const dy = e.clientY - downY;
-			if (dx * dx + dy * dy > 16) return; // suppress if drag > 4px
-			resetView();
-		}
-		el.addEventListener('mousedown', onMouseDown);
-		el.addEventListener('dblclick', onDblClick);
-		return () => {
-			el.removeEventListener('mousedown', onMouseDown);
-			el.removeEventListener('dblclick', onDblClick);
-		};
-	}
+	// Plotly handles zoom, pan, and reset internally with its modebar and drag controls.
+	// Custom overlays and control handlers will be adapted to Plotly events; manual axis helpers are removed.
 
 	// ---------------------------------------------------------------------------
 	// Build uPlot and attach interactions
 	// ---------------------------------------------------------------------------
-	$effect(() => {
-		if (!browser || !container) return;
+	let plotlyLib: any = $state(null);
 
-		// Track reactive dependencies
+	onMount(() => {
+		if (!browser) return;
+		(async () => {
+			try {
+				plotlyLib = (await import('plotly.js-dist-min')).default;
+			} catch (e) {
+				console.error('Plotly import failed:', e);
+			}
+		})();
+	});
+
+	$effect(() => {
+		if (dev) {
+			console.log(
+				'[GraphWidget effect] browser:',
+				browser,
+				'plotlyLib:',
+				plotlyLib,
+				'chartMount:',
+				chartMount,
+				'telemetry:',
+				$dataStore.telemetry.length,
+				'x:',
+				xField,
+				'y:',
+				yFields
+			);
+		}
+		if (!browser) return;
+		if (!plotlyLib) return;
+		if (!chartMount) return;
+		if (!$dataStore.telemetry.length) return;
+
 		const lines = $dataStore.telemetry;
 		const x = xField;
 		const ys = yFields;
 		const displayMode = xDisplayMode;
 
-		// Guard against stale async callbacks if the effect re-runs before the
-		// dynamic import resolves (e.g. user changes a field quickly).
-		let cancelled = false;
-
-		// Dynamically import uPlot to avoid SSR issues
-		import('uplot').then(({ default: uPlot }) => {
-			if (cancelled) return;
-
-			if (uplotInstance) {
-				uplotInstance.destroy();
-				uplotInstance = null;
+		const xs: number[] = [];
+		const yArrays: number[][] = ys.map(() => []);
+		const unixtimes: Date[] = [];
+		for (const line of lines) {
+			xs.push(line[x] as number);
+			unixtimes.push(line.unixtime);
+			for (let i = 0; i < ys.length; i++) {
+				yArrays[i].push(line[ys[i]] as number);
 			}
-			tooltipVisible = false;
+		}
+		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
+		const sortedXs = order.map((i) => xs[i]);
+		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
 
-			if (lines.length === 0 || !chartMount) return;
-
-			const { data: chartData, epochDate, firstMs } = buildData(lines, x, ys);
-
-			// Helper: format an x value for the current display mode
-			const formatXValue = (val: number): string => {
-				if (displayMode === 'relative') return formatRelative(val - firstMs);
-				if (displayMode === 'absolute') return formatAbsolute(val, epochDate, firstMs);
-				return val.toFixed(3);
+		const traces = sortedYs.map((ysArr, i) => {
+			const axis = i === 0 ? 'y' : 'y2';
+			return {
+				x: sortedXs,
+				y: ysArr,
+				type: 'scattergl',
+				mode: 'lines',
+				name: prettyLabel(ys[i]),
+				line: { color: SERIES_COLORS[i % SERIES_COLORS.length], width: 1.5 },
+				hoverinfo: 'x+y+name',
+				yaxis: axis
 			};
-
-			// Build series config — first entry is x-axis (no style needed)
-			const series: uPlot.Series[] = [{ label: prettyLabel(x) }];
-			for (let i = 0; i < ys.length; i++) {
-				series.push({
-					label: prettyLabel(ys[i]),
-					stroke: SERIES_COLORS[i % SERIES_COLORS.length],
-					width: 1.5,
-					scale: `y${i}`
-				});
-			}
-
-			// Independent scale per Y series.
-			// manualYRanges (hoisted to module scope) holds user-set y-zoom ranges
-			// keyed by scale name. When populated, the range function returns the
-			// locked bounds instead of letting uPlot auto-fit, which prevents panning
-			// the x-axis from resetting a y-zoom the user has already applied.
-			manualYRanges.clear(); // reset on each chart rebuild
-			const scales: Record<string, uPlot.Scale> = { x: { time: false } };
-			for (let i = 0; i < ys.length; i++) {
-				const key = `y${i}`;
-				scales[key] = {
-					// range is called by uPlot whenever it needs to (re)compute the visible
-					// y bounds. Returning null falls back to uPlot's built-in auto-fit.
-					range: (_u, dataMin, dataMax) => {
-						const manual = manualYRanges.get(key);
-						if (manual) return manual;
-						// Auto-fit: give a small 5% padding so the line isn't flush with
-						// the axis edges, matching uPlot's default auto behaviour.
-						const pad = (dataMax - dataMin) * 0.05 || 1;
-						return [dataMin - pad, dataMax + pad];
-					}
-				};
-			}
-
-			// Show at most 2 Y axes (left + right) to avoid clutter
-			const xAxis: uPlot.Axis = { label: prettyLabel(x) };
-			if (displayMode !== 'raw') {
-				// Custom tick-label formatter for time display modes.
-				// uPlot calls values(u, splits, axisIdx, foundSpace, foundIncr) → (string | number | null)[]
-				// splits may contain null for suppressed ticks — return "" for those.
-				xAxis.values = (_u, splits) =>
-					splits.map((t) => {
-						if (t == null) return '';
-						if (displayMode === 'relative') return formatRelative(t - firstMs);
-						return formatAbsolute(t, epochDate, firstMs);
-					});
-			}
-			const axes: uPlot.Axis[] = [xAxis];
-			for (let i = 0; i < ys.length; i++) {
-				axes.push({
-					scale: `y${i}`,
-					label: prettyLabel(ys[i]),
-					side: i % 2 === 0 ? 3 : 1, // 3 = left, 1 = right
-					show: i < 2 // only render first two axes visually
-				});
-			}
-
-			const opts: uPlot.Options = {
-				// Start with placeholder size — corrected immediately after mount below
-				width: 1,
-				height: 1,
-				legend: { show: false }, // we render our own tooltip overlay
-				cursor: {
-					sync: { key: 'telemetry' },
-					drag: { x: false, y: false } // We handle pan/zoom ourselves
-				},
-				series,
-				axes,
-				scales,
-				hooks: {
-					setCursor: [
-						(u) => {
-							const { left, top, idx } = u.cursor;
-							if (idx == null || left == null || top == null || left < 0) {
-								tooltipVisible = false;
-								return;
-							}
-							tooltipVisible = true;
-							// Flip tooltip to the left when cursor is in the right half to
-							// avoid it overflowing off the edge of the chart.
-							const chartWidth = container?.clientWidth ?? 0;
-							tooltipFlipped = left > chartWidth / 2;
-							tooltipX = tooltipFlipped ? left - 16 : left + 16;
-							tooltipY = top;
-
-							const xVal = (u.data[0] as number[])[idx];
-							tooltipXLabel = prettyLabel(x);
-							tooltipXValue = xVal != null ? formatXValue(xVal) : '—';
-
-							tooltipEntries = ys.map((field, i) => {
-								const val = (u.data[i + 1] as number[])[idx!];
-								return {
-									label: prettyLabel(field),
-									value: val != null ? val.toFixed(3) : '—',
-									color: SERIES_COLORS[i % SERIES_COLORS.length]
-								};
-							});
-						}
-					]
-				}
-			};
-
-			uplotInstance = new uPlot(opts, chartData, chartMount!);
-
-			// Defer size correction to the next animation frame so the flexbox
-			// layout has been computed and clientWidth/clientHeight are non-zero.
-			requestAnimationFrame(() => {
-				if (cancelled || !uplotInstance) return;
-				const { width, height } = plotSize();
-				uplotInstance.setSize({ width, height });
-			});
-
-			// Attach wheel zoom to the whole uPlot wrapper (so axis gutters are included),
-			// and pan to the inner overlay only (pan is scoped to the plot area).
-			const wrapEl = container!.querySelector('.u-wrap') as HTMLElement | null;
-			const overEl = container!.querySelector('.u-over') as HTMLElement | null;
-			if (wrapEl && overEl) {
-				const detachWheel = attachWheelZoom(uplotInstance, wrapEl, manualYRanges);
-				const detachPan = attachPan(uplotInstance, overEl, manualYRanges);
-				const detachDblClick = attachDoubleClickReset(overEl);
-				// Stash cleanup on the instance for teardown
-				uplotInstance._detachInteractions = () => {
-					detachWheel();
-					detachPan();
-					detachDblClick();
-				};
-			}
 		});
 
-		return () => {
-			cancelled = true;
-			if (uplotInstance) {
-				uplotInstance._detachInteractions?.();
-				uplotInstance.destroy();
-				uplotInstance = null;
-			}
-			tooltipVisible = false;
+		const layout: any = {
+			margin: { l: 40, r: 40, t: 16, b: 40 },
+			legend: { orientation: 'h', y: -0.2 },
+			xaxis: {
+				title: prettyLabel(x),
+				showgrid: true
+			},
+			yaxis: {
+				title: prettyLabel(ys[0]),
+				showgrid: true,
+				color: SERIES_COLORS[0]
+			},
+			showlegend: false,
+			dragmode: 'pan'
 		};
+
+		if (ys.length > 1) {
+			layout.yaxis2 = {
+				title: prettyLabel(ys.slice(1).join(', ')),
+				showgrid: false,
+				overlaying: 'y',
+				side: 'right',
+				color: SERIES_COLORS[1]
+			};
+		}
+
+		// Initial render: set time indicator to current (safe, no future dependency on time)
+		const indicatorShape = getTimeIndicatorShape(x, ys, undefined); // Don't depend on currentLine
+		layout.shapes = indicatorShape ? [indicatorShape] : [];
+
+		plotlyLib.react(chartMount, traces, layout, { responsive: true });
+		plotlyInstance = chartMount;
+
+		// Attach overlays/events after render (reuse logic as before)
+		function attachTooltipEvents() {
+			// ------------------------ CUSTOM WHEEL ZOOM HANDLER ------------------------
+			// Implements pixel-perfect scroll-to-zoom for both axes and axis-specific zoom.
+			// Behavior:
+			//   - Normal wheel: zooms BOTH axes at the pointer.
+			//   - Shift+wheel in margins:
+			//       • Left Y margin: zooms only primary (left) Y axis.
+			//       • Right Y margin (if 2+ yFields): zooms only secondary (right) Y axis.
+			//       • Bottom margin: zooms only X axis (disables Y zoom).
+			//   - Drag (pan) uses Plotly's internal dragmode (never handled here).
+			//   - Margin zone = 24px from each edge. Axis/margin rules:
+			//       1. If shift is NOT held: zoom both axes at cursor.
+			//       2. If shift IS held:
+			//           a. Left Y margin only: zoom only primary Y axis.
+			//           b. Right Y margin only (and 2+ Y axes): zoom only secondary Y axis.
+			//           c. Bottom margin only: zoom only X axis.
+			//           d. If neither, do nothing (require clear margin intent).
+			//   - Edge case: If only one Y axis, right margin has no effect.
+			// Axis relayout handled via Plotly `relayout()` in margin-mode switches.
+			// For full details, see hit-test logic and relayout sections below.
+			// Clean-up logic removes wheel handler on widget/browser unmount.
+			//
+			// Maintainer quick test protocol (after changes):
+			//   - Zoom/pan in all margin regions with/without secondary Y axes.
+			//   - Confirm single-axis-only zoom in margins, dual axis zoom elsewhere.
+			//   - Reset view restores full range; double-click resets as well.
+			//
+			// Safe for runes syntax, SSR, and full TS strict mode.
+			$effect(() => {
+				if (!browser || !chartMount || !plotlyInstance) return;
+
+				// Disable Plotly's internal scroll-zoomer
+				if (plotlyInstance._fullLayout) plotlyInstance._fullLayout.scrollZoom = false;
+
+				const el = chartMount;
+				// Returns [xMin, xMax, yMin, yMax] from Plotly layout
+				function getCurrentRanges(): [number, number, number, number] {
+					const layout = plotlyInstance._fullLayout;
+					const arr = [
+						layout?.xaxis?.range?.[0],
+						layout?.xaxis?.range?.[1],
+						layout?.yaxis?.range?.[0],
+						layout?.yaxis?.range?.[1]
+					].map(Number);
+					if (arr.length !== 4 || arr.some((n) => !isFinite(n))) {
+						return [0, 1, 0, 1];
+					}
+					return arr as [number, number, number, number];
+				}
+
+				/**
+				 * Converts a pixel (x, y) coordinate to data values.
+				 * By default does y for primary axis; pass yAxis = "y2" for secondary right axis.
+				 */
+				function pixelToData(
+					x: number,
+					y: number,
+					yAxis: 'y' | 'y2' = 'y'
+				): { xx: number; yy: number } {
+					const layout = plotlyInstance._fullLayout;
+					const w = el.clientWidth;
+					const h = el.clientHeight;
+
+					// Main axis ranges
+					const [xMin, xMax, yMin, yMax] = getCurrentRanges();
+					const left = layout.margin?.l ?? 40;
+					const top = layout.margin?.t ?? 16;
+					const right = w - (layout.margin?.r ?? 40);
+					const bottom = h - (layout.margin?.b ?? 40);
+
+					const px = Math.max(left, Math.min(x, right));
+					const py = Math.max(top, Math.min(y, bottom));
+
+					const xPct = (px - left) / (right - left);
+					const xx = xMin + (xMax - xMin) * xPct;
+
+					// Which Y axis? Overlayed axes must use their own range
+					if (yAxis === 'y2' && layout.yaxis2 && layout.yaxis2.range) {
+						const y2Min = Number(layout.yaxis2.range[0]);
+						const y2Max = Number(layout.yaxis2.range[1]);
+						// y2 overlays primary, so pixels are the same; just remap the range
+						const yPct = 1 - (py - top) / (bottom - top);
+						const yy = y2Min + (y2Max - y2Min) * yPct;
+						return { xx, yy };
+					} else {
+						const yPct = 1 - (py - top) / (bottom - top);
+						const yy = yMin + (yMax - yMin) * yPct;
+						return { xx, yy };
+					}
+				}
+
+				function wheelHandler(e: WheelEvent): void {
+					if (!(plotlyInstance && plotlyInstance._fullLayout)) return;
+					// Only act if ctrl/cmd are NOT held (browser zoom)
+					if (e.ctrlKey || e.metaKey) return;
+					e.preventDefault();
+					let yMarginZoom: 'left' | 'right' | null = null;
+					let useY2 = false;
+					const [xMin, xMax, yMin, yMax] = getCurrentRanges();
+					let zoomX = true,
+						zoomY = true;
+					const margin = 24; // px: margin region for axis-specific zoom
+
+					if (e.shiftKey) {
+						const layout = plotlyInstance._fullLayout;
+						const rightMargin = el.clientWidth - (layout.margin?.r ?? 40);
+						const hasRightY = ys.length > 1;
+						if (e.offsetY > el.clientHeight - margin) zoomY = false; // in bottom margin
+						if (e.offsetX < margin) {
+							zoomX = false; // in left Y margin
+							yMarginZoom = 'left';
+						}
+						if (hasRightY && e.offsetX > rightMargin) {
+							zoomX = false; // in right Y margin (for yaxis2)
+							yMarginZoom = 'right';
+							useY2 = true;
+						}
+						// Now, if in *either* Y margin, only Y will zoom (zoomY = true, zoomX = false)
+						if (!zoomX && !zoomY) return; // must hit margin for axis-specific zoom
+						// If both are false (i.e., pointer is outside any axis margin), do nothing
+					}
+
+					const { xx, yy } = useY2
+						? pixelToData(e.offsetX, e.offsetY, 'y2')
+						: pixelToData(e.offsetX, e.offsetY, 'y');
+
+					const dz = Math.sign(e.deltaY) * 0.1; // 10% per notch
+					const minSpan = 1e-12;
+					let nx0 = xMin,
+						nx1 = xMax,
+						ny0 = yMin,
+						ny1 = yMax;
+					if (zoomX) {
+						const x0 = xx - (xx - xMin) * (1 + dz);
+						const x1 = xx + (xMax - xx) * (1 + dz);
+						if (isFinite(x0) && isFinite(x1) && Math.abs(x1 - x0) > minSpan) {
+							nx0 = x0;
+							nx1 = x1;
+						}
+					}
+					if (zoomY) {
+						// For y2, use y2 range; otherwise normal
+						if (useY2 && plotlyInstance._fullLayout.yaxis2) {
+							const y2Min = Number(plotlyInstance._fullLayout.yaxis2.range[0]);
+							const y2Max = Number(plotlyInstance._fullLayout.yaxis2.range[1]);
+							const y0 = yy - (yy - y2Min) * (1 + dz);
+							const y1 = yy + (y2Max - yy) * (1 + dz);
+							if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
+								ny0 = y0;
+								ny1 = y1;
+							}
+						} else {
+							const y0 = yy - (yy - yMin) * (1 + dz);
+							const y1 = yy + (yMax - yy) * (1 + dz);
+							if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
+								ny0 = y0;
+								ny1 = y1;
+							}
+						}
+					}
+
+					if (yMarginZoom === 'left') {
+						plotlyLib.relayout(plotlyInstance, {
+							'yaxis.range': [ny0, ny1]
+						});
+					} else if (yMarginZoom === 'right') {
+						plotlyLib.relayout(plotlyInstance, {
+							'yaxis2.range': [ny0, ny1]
+						});
+					} else {
+						plotlyLib.relayout(plotlyInstance, {
+							'xaxis.range': [nx0, nx1],
+							'yaxis.range': [ny0, ny1]
+						});
+					}
+					// END of wheelHandler
+					// (Redundant relayouts removed in accordance with code review)
+					// Only a single relayout per wheel event is necessary.
+				}
+
+				el.addEventListener('wheel', wheelHandler, { passive: false });
+				return () => {
+					el.removeEventListener('wheel', wheelHandler);
+				};
+			});
+
+			if (!plotlyInstance || !chartMount) return;
+			const chartEl = chartMount;
+			const hoverHandler = (event: any) => {
+				if (event && event.points && event.points.length > 0) {
+					const pt = event.points[0];
+					tooltipVisible = true;
+					const chartWidth = container?.clientWidth ?? 0;
+					tooltipFlipped = pt.xpx > chartWidth / 2;
+					tooltipX = tooltipFlipped ? pt.xpx - 16 : pt.xpx + 16;
+					tooltipY = pt.ypx;
+					tooltipXLabel = pt.xaxis.title.text ?? prettyLabel(xField);
+					tooltipXValue = pt.x != null ? pt.x.toFixed(3) : '—';
+					tooltipEntries = yFields.map((field, i) => ({
+						label: prettyLabel(field),
+						value: pt.y != null ? pt.y.toFixed(3) : '—',
+						color: SERIES_COLORS[i % SERIES_COLORS.length]
+					}));
+				}
+			};
+			const unhoverHandler = () => {
+				tooltipVisible = false;
+			};
+			chartEl.addEventListener('plotly_hover', hoverHandler);
+			chartEl.addEventListener('plotly_unhover', unhoverHandler);
+			plotlyInstance._detachPlotlyTooltip = () => {
+				chartEl.removeEventListener('plotly_hover', hoverHandler);
+				chartEl.removeEventListener('plotly_unhover', unhoverHandler);
+			};
+		}
+
+		attachTooltipEvents();
 	});
 
-	// ---------------------------------------------------------------------------
-	// Global time indicator pixel calculation (for overlay)
-	// ---------------------------------------------------------------------------
-	let timeIndicatorX = $state<number | null>(null);
+	// Global time indicator now handled as a Plotly shape (see layout.shapes logic)
+
+	// EFFECT: Move indicator only on time change (no layout/pan reset)
+	// EFFECT: Only update indicator when time or axes change (never full redraw)
 	$effect(() => {
-		if (!browser || !container || !uplotInstance) {
-			timeIndicatorX = null;
-			return;
-		}
-
-		const chartWidth = container.clientWidth ?? 0;
-		if (chartWidth <= 0) {
-			timeIndicatorX = null;
-			return;
-		}
-		const xScale = uplotInstance.scales.x;
-		if (!xScale || typeof xScale.min !== 'number' || typeof xScale.max !== 'number') {
-			timeIndicatorX = null;
-			return;
-		}
-
-		// Use currentLine from the global time index store
-		const currentLine = $timeIndexStore.currentLine;
-		let currentXValue: number | undefined = undefined;
-		if (currentLine && typeof currentLine[xField] === 'number') {
-			currentXValue = currentLine[xField];
-		}
-
-		if (typeof currentXValue !== 'number' || !isFinite(currentXValue)) {
-			timeIndicatorX = null;
-			return;
-		}
-
-		const xMin = xScale.min as number;
-		const xMax = xScale.max as number;
-		let px;
-		if (currentXValue < xMin) {
-			px = 0;
-		} else if (currentXValue > xMax) {
-			px = chartWidth - 1;
-		} else {
-			const frac = (currentXValue - xMin) / (xMax - xMin);
-			px = Math.round(frac * chartWidth);
-		}
-		// Clamp within chart width to avoid overflow
-		timeIndicatorX = Math.max(0, Math.min(px, chartWidth - 1));
+		if (!browser || !plotlyLib || !plotlyInstance) return;
+		const indicatorShape = getTimeIndicatorShape(xField, yFields, $timeIndexStore.currentLine);
+		// Only the shapes array is updated; this preserves all zoom/pan state
+		plotlyLib.relayout(plotlyInstance, {
+			shapes: indicatorShape ? [indicatorShape] : []
+		});
 	});
+
+	// Main chart render (never depend on currentLine!
+	// Only depend on data, axes, config, resize, or mount)
+	// (No code change here, just doc to clarify responsibilities)
 
 	// ---------------------------------------------------------------------------
 	// ResizeObserver — drives ALL sizing (initial + subsequent resizes).
 	// Observes the chart container div (below the controls bar).
 	// ---------------------------------------------------------------------------
 	$effect(() => {
-		if (!browser || !container) return;
+		if (!browser || !container || !plotlyInstance) return;
+		// Plotly must be loaded in browser/onMount
 		const observer = new ResizeObserver(() => {
-			if (!uplotInstance) return;
+			if (!plotlyInstance) return;
 			const { width, height } = plotSize();
-			uplotInstance.setSize({ width, height });
+			// Plotly instance returned from onMount	only
+			if (typeof plotlyInstance.relayout === 'function') {
+				plotlyInstance.relayout({ width, height });
+			} else if (
+				typeof window.Plotly !== 'undefined' &&
+				typeof window.Plotly.relayout === 'function'
+			) {
+				window.Plotly.relayout(plotlyInstance, { width, height });
+			}
 		});
 		observer.observe(container);
 		return () => observer.disconnect();
@@ -789,75 +751,51 @@
 
 		<div class="ml-auto flex items-center gap-2">
 			{#if $dataStore.telemetry.length > 0}
-				<span class="text-xs text-stone-400"
-					>{$dataStore.telemetry.length.toLocaleString()} pts</span
-				>
-				<button
-					onclick={resetView}
-					class="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-600 hover:bg-stone-50 active:bg-stone-100"
-					title="Reset view (also double-click on chart)"
-				>
-					Reset view
-				</button>
+				<span class="text-xs text-stone-400">
+					{$dataStore.telemetry.length.toLocaleString()} pts
+				</span>
 			{/if}
 		</div>
 	</div>
 
-	<!-- uPlot mount point + tooltip overlay -->
-	<div bind:this={container} class="relative min-h-0 flex-1 overflow-hidden">
+	<!-- Plotly chart mount point + tooltip overlay -->
+	<div
+		bind:this={container}
+		class="relative min-h-0 flex-1 overflow-hidden"
+		onpointermove={onPointerMoveMarginZoom}
+		onpointerleave={onPointerLeaveMarginZoom}
+	>
 		{#if $dataStore.telemetry.length === 0}
 			<div class="flex h-full items-center justify-center text-sm text-stone-400">
 				No data loaded — use a Load Data pane to import a file
 			</div>
 		{/if}
 
-		<!-- uPlot renders here; absolutely fills container so it doesn't affect layout measurement -->
+		<!-- Plotly renders here; absolutely fills container so it doesn't affect layout measurement -->
 		<div bind:this={chartMount} class="absolute inset-0"></div>
-
-		<!-- Global time indicator overlay -->
-		<!--
-		Global Time Indicator Overlay
-		- Renders a vertical line at pixel position corresponding to global time index.
-		- Shows pill overlay above line with formatted value.
-		- Both line and pill are visible unless timeIndicatorX === null (uncomputable).
-		- OOB values clamp indicator to chart edge (left/right).
-		-->
-		{#if timeIndicatorX !== null}
+		{#if zoomMarginHover === 'left'}
 			<div
-				class="pointer-events-none absolute top-0 h-full w-[2px] z-20 bg-fuchsia-500 opacity-70"
-				style="left:{timeIndicatorX}px"
-				aria-label="Global Time Indicator"
+				class="pointer-events-none absolute left-0 top-0 h-full z-30"
+				style="width:24px; background:rgba(59,130,246,0.11); border-radius:6px 0 0 6px;"
+				aria-hidden="true"
 			></div>
-
-			<!-- Pill overlay for indicator label -->
-			<div
-				class="pointer-events-none absolute z-30 px-2 py-0.5 rounded-full bg-fuchsia-200 text-fuchsia-700 text-xs font-medium shadow-md border border-fuchsia-400 select-none"
-				style="left:{timeIndicatorX}px; top:8px; transform:translateX(-50%)"
-				aria-label="Indicator Value Label"
-			>
-				{(() => {
-					// Show value at current global index for selected xField; format for time-like, else show raw.
-					const currentLine = $timeIndexStore.currentLine;
-					const val =
-						currentLine && typeof currentLine[xField] === 'number' ? currentLine[xField] : null;
-					if (val == null || isNaN(val)) return '—';
-					if (isTimeField(xField)) {
-						if (xDisplayMode === 'absolute') {
-							const epoch =
-								currentLine && currentLine.unixtime ? currentLine.unixtime : new Date(0);
-							return formatAbsolute(val, epoch, val);
-						} else if (xDisplayMode === 'relative') {
-							return formatRelative(val);
-						} else {
-							return val.toFixed(3);
-						}
-					} else {
-						// Non-time field: show raw numeric value
-						return val.toFixed(3);
-					}
-				})()}
-			</div>
 		{/if}
+		{#if zoomMarginHover === 'right' && yFields.length > 1}
+			<div
+				class="pointer-events-none absolute right-0 top-0 h-full z-30"
+				style="width:24px; background:rgba(236,72,153,0.10); border-radius:0 6px 6px 0;"
+				aria-hidden="true"
+			></div>
+		{/if}
+		{#if zoomMarginHover === 'bottom'}
+			<div
+				class="pointer-events-none absolute left-0 bottom-0 w-full z-30"
+				style="height:24px; background:rgba(16,185,129,0.07); border-radius:0 0 6px 6px;"
+				aria-hidden="true"
+			></div>
+		{/if}
+
+		<!-- (Removed: Global time indicator overlay) Now integrated as Plotly shape that pans/zooms with data. -->
 
 		<!-- Tooltip overlay -->
 		{#if tooltipVisible}

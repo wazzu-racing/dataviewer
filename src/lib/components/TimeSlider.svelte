@@ -7,7 +7,7 @@
 	}
 </script>
 
-<div class="w-full px-4 py-2 bg-gray-900 border-t border-gray-700 flex items-center gap-4">
+<div class="w-full h-14 px-4 bg-gray-900 flex items-center gap-4">
 	<label class="text-xs text-gray-300 font-medium">Time</label>
 	<input
 		type="range"
