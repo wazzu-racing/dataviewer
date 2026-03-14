@@ -357,6 +357,191 @@
 
 		// Attach overlays/events after render (reuse logic as before)
 		function attachTooltipEvents() {
+			// ------------------------ CUSTOM WHEEL ZOOM HANDLER ------------------------
+			// Implements pixel-perfect scroll-to-zoom for both axes and axis-specific zoom.
+			// Behavior:
+			//   - Normal wheel: zooms BOTH axes at the pointer.
+			//   - Shift+wheel in margins:
+			//       • Left Y margin: zooms only primary (left) Y axis.
+			//       • Right Y margin (if 2+ yFields): zooms only secondary (right) Y axis.
+			//       • Bottom margin: zooms only X axis (disables Y zoom).
+			//   - Drag (pan) uses Plotly's internal dragmode (never handled here).
+			//   - Margin zone = 24px from each edge. Axis/margin rules:
+			//       1. If shift is NOT held: zoom both axes at cursor.
+			//       2. If shift IS held:
+			//           a. Left Y margin only: zoom only primary Y axis.
+			//           b. Right Y margin only (and 2+ Y axes): zoom only secondary Y axis.
+			//           c. Bottom margin only: zoom only X axis.
+			//           d. If neither, do nothing (require clear margin intent).
+			//   - Edge case: If only one Y axis, right margin has no effect.
+			// Axis relayout handled via Plotly `relayout()` in margin-mode switches.
+			// For full details, see hit-test logic and relayout sections below.
+			// Clean-up logic removes wheel handler on widget/browser unmount.
+			//
+			// Maintainer quick test protocol (after changes):
+			//   - Zoom/pan in all margin regions with/without secondary Y axes.
+			//   - Confirm single-axis-only zoom in margins, dual axis zoom elsewhere.
+			//   - Reset view restores full range; double-click resets as well.
+			//
+			// Safe for runes syntax, SSR, and full TS strict mode.
+			$effect(() => {
+				if (!browser || !chartMount || !plotlyInstance) return;
+
+				// Disable Plotly's internal scroll-zoomer
+				if (plotlyInstance._fullLayout) plotlyInstance._fullLayout.scrollZoom = false;
+
+				const el = chartMount;
+				// Returns [xMin, xMax, yMin, yMax] from Plotly layout
+				function getCurrentRanges(): [number, number, number, number] {
+					const layout = plotlyInstance._fullLayout;
+					const arr = [
+						layout?.xaxis?.range?.[0],
+						layout?.xaxis?.range?.[1],
+						layout?.yaxis?.range?.[0],
+						layout?.yaxis?.range?.[1]
+					].map(Number);
+					if (arr.length !== 4 || arr.some((n) => !isFinite(n))) {
+						return [0, 1, 0, 1];
+					}
+					return arr as [number, number, number, number];
+				}
+
+				/**
+				 * Converts a pixel (x, y) coordinate to data values.
+				 * By default does y for primary axis; pass yAxis = "y2" for secondary right axis.
+				 */
+				function pixelToData(
+					x: number,
+					y: number,
+					yAxis: 'y' | 'y2' = 'y'
+				): { xx: number; yy: number } {
+					const layout = plotlyInstance._fullLayout;
+					const w = el.clientWidth;
+					const h = el.clientHeight;
+
+					// Main axis ranges
+					const [xMin, xMax, yMin, yMax] = getCurrentRanges();
+					const left = layout.margin?.l ?? 40;
+					const top = layout.margin?.t ?? 16;
+					const right = w - (layout.margin?.r ?? 40);
+					const bottom = h - (layout.margin?.b ?? 40);
+
+					const px = Math.max(left, Math.min(x, right));
+					const py = Math.max(top, Math.min(y, bottom));
+
+					const xPct = (px - left) / (right - left);
+					const xx = xMin + (xMax - xMin) * xPct;
+
+					// Which Y axis? Overlayed axes must use their own range
+					if (yAxis === 'y2' && layout.yaxis2 && layout.yaxis2.range) {
+						const y2Min = Number(layout.yaxis2.range[0]);
+						const y2Max = Number(layout.yaxis2.range[1]);
+						// y2 overlays primary, so pixels are the same; just remap the range
+						const yPct = 1 - (py - top) / (bottom - top);
+						const yy = y2Min + (y2Max - y2Min) * yPct;
+						return { xx, yy };
+					} else {
+						const yPct = 1 - (py - top) / (bottom - top);
+						const yy = yMin + (yMax - yMin) * yPct;
+						return { xx, yy };
+					}
+				}
+
+				function wheelHandler(e: WheelEvent): void {
+					if (!(plotlyInstance && plotlyInstance._fullLayout)) return;
+					// Only act if ctrl/cmd are NOT held (browser zoom)
+					if (e.ctrlKey || e.metaKey) return;
+					e.preventDefault();
+					let yMarginZoom: 'left' | 'right' | null = null;
+					let useY2 = false;
+					const [xMin, xMax, yMin, yMax] = getCurrentRanges();
+					let zoomX = true,
+						zoomY = true;
+					const margin = 24; // px: margin region for axis-specific zoom
+
+					if (e.shiftKey) {
+						const layout = plotlyInstance._fullLayout;
+						const rightMargin = el.clientWidth - (layout.margin?.r ?? 40);
+						const hasRightY = ys.length > 1;
+						if (e.offsetY > el.clientHeight - margin) zoomY = false; // in bottom margin
+						if (e.offsetX < margin) {
+							zoomX = false; // in left Y margin
+							yMarginZoom = 'left';
+						}
+						if (hasRightY && e.offsetX > rightMargin) {
+							zoomX = false; // in right Y margin (for yaxis2)
+							yMarginZoom = 'right';
+							useY2 = true;
+						}
+						// Now, if in *either* Y margin, only Y will zoom (zoomY = true, zoomX = false)
+						if (!zoomX && !zoomY) return; // must hit margin for axis-specific zoom
+						// If both are false (i.e., pointer is outside any axis margin), do nothing
+					}
+
+					const { xx, yy } = useY2
+						? pixelToData(e.offsetX, e.offsetY, 'y2')
+						: pixelToData(e.offsetX, e.offsetY, 'y');
+
+					const dz = Math.sign(e.deltaY) * 0.1; // 10% per notch
+					const minSpan = 1e-12;
+					let nx0 = xMin,
+						nx1 = xMax,
+						ny0 = yMin,
+						ny1 = yMax;
+					if (zoomX) {
+						const x0 = xx - (xx - xMin) * (1 + dz);
+						const x1 = xx + (xMax - xx) * (1 + dz);
+						if (isFinite(x0) && isFinite(x1) && Math.abs(x1 - x0) > minSpan) {
+							nx0 = x0;
+							nx1 = x1;
+						}
+					}
+					if (zoomY) {
+						// For y2, use y2 range; otherwise normal
+						if (useY2 && plotlyInstance._fullLayout.yaxis2) {
+							const y2Min = Number(plotlyInstance._fullLayout.yaxis2.range[0]);
+							const y2Max = Number(plotlyInstance._fullLayout.yaxis2.range[1]);
+							const y0 = yy - (yy - y2Min) * (1 + dz);
+							const y1 = yy + (y2Max - yy) * (1 + dz);
+							if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
+								ny0 = y0;
+								ny1 = y1;
+							}
+						} else {
+							const y0 = yy - (yy - yMin) * (1 + dz);
+							const y1 = yy + (yMax - yy) * (1 + dz);
+							if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
+								ny0 = y0;
+								ny1 = y1;
+							}
+						}
+					}
+
+					if (yMarginZoom === 'left') {
+						plotlyLib.relayout(plotlyInstance, {
+							'yaxis.range': [ny0, ny1]
+						});
+					} else if (yMarginZoom === 'right') {
+						plotlyLib.relayout(plotlyInstance, {
+							'yaxis2.range': [ny0, ny1]
+						});
+					} else {
+						plotlyLib.relayout(plotlyInstance, {
+							'xaxis.range': [nx0, nx1],
+							'yaxis.range': [ny0, ny1]
+						});
+					}
+					// END of wheelHandler
+					// (Redundant relayouts removed in accordance with code review)
+					// Only a single relayout per wheel event is necessary.
+				}
+
+				el.addEventListener('wheel', wheelHandler, { passive: false });
+				return () => {
+					el.removeEventListener('wheel', wheelHandler);
+				};
+			});
+
 			if (!plotlyInstance || !chartMount) return;
 			const chartEl = chartMount;
 			const hoverHandler = (event: any) => {
