@@ -103,6 +103,33 @@
 
 	// ---------------------------------------------------------------------------
 	// Widget state — seeded once from persisted config
+	// Margin zoom highlight state and axis margin pointer handlers
+	let zoomMarginHover: 'left' | 'right' | 'bottom' | null = $state(null);
+
+	function onPointerMoveMarginZoom(e: PointerEvent) {
+		if (!e.shiftKey || !container) {
+			zoomMarginHover = null;
+			return;
+		}
+		const margin = 24;
+		const rect = container.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const y = e.clientY - rect.top;
+		if (x < margin) {
+			zoomMarginHover = 'left';
+		} else if (y > rect.height - margin) {
+			zoomMarginHover = 'bottom';
+		} else if (yFields.length > 1 && x > rect.width - margin) {
+			zoomMarginHover = 'right';
+		} else {
+			zoomMarginHover = null;
+		}
+	}
+
+	function onPointerLeaveMarginZoom() {
+		zoomMarginHover = null;
+	}
+
 	// ---------------------------------------------------------------------------
 	let xField: NumericField = $state(_seedX);
 	let yFields: NumericField[] = $state([..._seedY]);
@@ -761,7 +788,12 @@
 	</div>
 
 	<!-- uPlot mount point + tooltip overlay -->
-	<div bind:this={container} class="relative min-h-0 flex-1 overflow-hidden">
+	<div
+		bind:this={container}
+		class="relative min-h-0 flex-1 overflow-hidden"
+		onpointermove={onPointerMoveMarginZoom}
+		onpointerleave={onPointerLeaveMarginZoom}
+	>
 		{#if $dataStore.telemetry.length === 0}
 			<div class="flex h-full items-center justify-center text-sm text-stone-400">
 				No data loaded — use a Load Data pane to import a file
@@ -770,6 +802,27 @@
 
 		<!-- uPlot renders here; absolutely fills container so it doesn't affect layout measurement -->
 		<div bind:this={chartMount} class="absolute inset-0"></div>
+		{#if zoomMarginHover === 'left'}
+			<div
+				class="pointer-events-none absolute left-0 top-0 h-full z-30"
+				style="width:24px; background:rgba(59,130,246,0.11); border-radius:6px 0 0 6px;"
+				aria-hidden="true"
+			></div>
+		{/if}
+		{#if zoomMarginHover === 'right' && yFields.length > 1}
+			<div
+				class="pointer-events-none absolute right-0 top-0 h-full z-30"
+				style="width:24px; background:rgba(236,72,153,0.10); border-radius:0 6px 6px 0;"
+				aria-hidden="true"
+			></div>
+		{/if}
+		{#if zoomMarginHover === 'bottom'}
+			<div
+				class="pointer-events-none absolute left-0 bottom-0 w-full z-30"
+				style="height:24px; background:rgba(16,185,129,0.07); border-radius:0 0 6px 6px;"
+				aria-hidden="true"
+			></div>
+		{/if}
 
 		<!-- Global time indicator overlay -->
 		<!--
