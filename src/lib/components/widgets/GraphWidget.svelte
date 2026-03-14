@@ -291,39 +291,6 @@
 	// Plotly handles zoom, pan, and reset internally with its modebar and drag controls.
 	// Custom overlays and control handlers will be adapted to Plotly events; manual axis helpers are removed.
 
-	// Fall back to the full data extent when the scale hasn't been initialised yet
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-
-	// Resets all manual y-zoom and x-zoom, restoring the full auto-fit view.
-	// Safe to call at any time; no-ops if no plot is mounted yet.
-	// Reset view must be browser-only and Plotly-only
-	let resetView = () => {};
-	// Inside onMount, this will be redefined
-
-	// Double-click on the plot area resets the view (both axes).
-	// Suppressed when the double-click is the tail end of a drag (displacement > 4px).
-	function attachDoubleClickReset(el: HTMLElement) {
-		let downX = 0;
-		let downY = 0;
-		function onMouseDown(e: MouseEvent) {
-			downX = e.clientX;
-			downY = e.clientY;
-		}
-		function onDblClick(e: MouseEvent) {
-			const dx = e.clientX - downX;
-			const dy = e.clientY - downY;
-			if (dx * dx + dy * dy > 16) return; // suppress if drag > 4px
-			resetView();
-		}
-		el.addEventListener('mousedown', onMouseDown);
-		el.addEventListener('dblclick', onDblClick);
-		return () => {
-			el.removeEventListener('mousedown', onMouseDown);
-			el.removeEventListener('dblclick', onDblClick);
-		};
-	}
-
 	// ---------------------------------------------------------------------------
 	// Build uPlot and attach interactions
 	// ---------------------------------------------------------------------------
@@ -380,12 +347,6 @@
 		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
 		const epochDate = unixtimes[order[0]] ?? new Date(0);
 		const firstMs = sortedXs[0] ?? 0;
-
-		const formatXValue = (val: number): string => {
-			if (displayMode === 'relative') return formatRelative(val - firstMs);
-			if (displayMode === 'absolute') return formatAbsolute(val, epochDate, firstMs);
-			return val.toFixed(3);
-		};
 
 		const traces = sortedYs.map((ysArr, i) => {
 			const axis = i === 0 ? 'y' : 'y2';
@@ -790,16 +751,9 @@
 
 		<div class="ml-auto flex items-center gap-2">
 			{#if $dataStore.telemetry.length > 0}
-				<span class="text-xs text-stone-400"
-					>{$dataStore.telemetry.length.toLocaleString()} pts</span
-				>
-				<button
-					onclick={resetView}
-					class="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-600 hover:bg-stone-50 active:bg-stone-100"
-					title="Reset view (also double-click on chart)"
-				>
-					Reset view
-				</button>
+				<span class="text-xs text-stone-400">
+					{$dataStore.telemetry.length.toLocaleString()} pts
+				</span>
 			{/if}
 		</div>
 	</div>
