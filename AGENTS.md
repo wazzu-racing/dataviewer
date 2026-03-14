@@ -158,7 +158,7 @@ pnpm lint && pnpm check && pnpm format
 
 ## Important Notes
 
-1. SvelteKit uses `adapter-auto` (static site generation)
+1. SvelteKit is configured with `@sveltejs/adapter-static` for static site generation
 2. Svelte 5 runes exclusively; migrate old code using MCP migration tools
 3. All documentation in markdown goes in `docs/`; never in README.md
 4. Use Svelte MCP tools: `list-sections`, `get-documentation`, `svelte-autofixer`
