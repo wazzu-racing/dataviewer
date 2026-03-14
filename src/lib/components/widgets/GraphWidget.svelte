@@ -345,8 +345,6 @@
 		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
 		const sortedXs = order.map((i) => xs[i]);
 		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
-		const epochDate = unixtimes[order[0]] ?? new Date(0);
-		const firstMs = sortedXs[0] ?? 0;
 
 		const traces = sortedYs.map((ysArr, i) => {
 			const axis = i === 0 ? 'y' : 'y2';
