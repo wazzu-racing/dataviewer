@@ -756,7 +756,7 @@
 		</div>
 	</div>
 
-	<!-- uPlot mount point + tooltip overlay -->
+	<!-- Plotly chart mount point + tooltip overlay -->
 	<div
 		bind:this={container}
 		class="relative min-h-0 flex-1 overflow-hidden"
@@ -769,7 +769,7 @@
 			</div>
 		{/if}
 
-		<!-- uPlot renders here; absolutely fills container so it doesn't affect layout measurement -->
+		<!-- Plotly renders here; absolutely fills container so it doesn't affect layout measurement -->
 		<div bind:this={chartMount} class="absolute inset-0"></div>
 		{#if zoomMarginHover === 'left'}
 			<div
