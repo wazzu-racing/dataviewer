@@ -64,6 +64,54 @@
 
 	type NumericField = (typeof NUMERIC_FIELDS)[number];
 
+	// Helper: Compute time indicator shape for Plotly layout
+	function getTimeIndicatorShape(
+		x: NumericField,
+		ys: NumericField[],
+		currentLine: DataLine | undefined | null
+	) {
+		if (!currentLine) return null;
+		if (isTimeField(x)) {
+			const v = currentLine[x];
+			if (typeof v === 'number' && isFinite(v)) {
+				return {
+					type: 'line',
+					xref: 'x',
+					yref: 'paper',
+					x0: v,
+					x1: v,
+					y0: 0,
+					y1: 1,
+					line: {
+						color: 'rgba(236, 72, 153, 0.85)',
+						width: 2
+					}
+				};
+			}
+		} else if (Array.isArray(ys)) {
+			const timeYField = ys.find(isTimeField);
+			if (timeYField) {
+				const v = currentLine[timeYField];
+				if (typeof v === 'number' && isFinite(v)) {
+					return {
+						type: 'line',
+						xref: 'paper',
+						yref: 'y',
+						x0: 0,
+						x1: 1,
+						y0: v,
+						y1: v,
+						line: {
+							color: 'rgba(236, 72, 153, 0.85)',
+							width: 2
+						}
+					};
+				}
+			}
+		}
+		return null;
+	}
+
 	// ---------------------------------------------------------------------------
 	// Color palette for multi-series
 	// ---------------------------------------------------------------------------
@@ -379,6 +427,10 @@
 			};
 		}
 
+		// Initial render: set time indicator to current (safe, no future dependency on time)
+		const indicatorShape = getTimeIndicatorShape(x, ys, undefined); // Don't depend on currentLine
+		layout.shapes = indicatorShape ? [indicatorShape] : [];
+
 		plotlyLib.react(chartMount, traces, layout, { responsive: true });
 		plotlyInstance = chartMount;
 
@@ -602,57 +654,22 @@
 		attachTooltipEvents();
 	});
 
-	// Global time indicator pixel calculation (for overlay)
-	// ---------------------------------------------------------------------------
-	let timeIndicatorX = $state<number | null>(null);
+	// Global time indicator now handled as a Plotly shape (see layout.shapes logic)
+
+	// EFFECT: Move indicator only on time change (no layout/pan reset)
+	// EFFECT: Only update indicator when time or axes change (never full redraw)
 	$effect(() => {
-		if (!browser || !container || !plotlyInstance) {
-			timeIndicatorX = null;
-			return;
-		}
-
-		const chartWidth = container.clientWidth ?? 0;
-		if (chartWidth <= 0) {
-			timeIndicatorX = null;
-			return;
-		}
-
-		// Use Plotly's axis extents for x
-		let xMin = 0;
-		let xMax = 1;
-		const fullLayout = plotlyInstance._fullLayout;
-		if (
-			fullLayout &&
-			fullLayout.xaxis &&
-			typeof fullLayout.xaxis.range === 'object' &&
-			fullLayout.xaxis.range.length === 2
-		) {
-			xMin = Number(fullLayout.xaxis.range[0]);
-			xMax = Number(fullLayout.xaxis.range[1]);
-		}
-
-		const currentLine = $timeIndexStore.currentLine;
-		let currentXValue: number | undefined = undefined;
-		if (currentLine && typeof currentLine[xField] === 'number') {
-			currentXValue = currentLine[xField];
-		}
-
-		if (typeof currentXValue !== 'number' || !isFinite(currentXValue)) {
-			timeIndicatorX = null;
-			return;
-		}
-
-		let px;
-		if (currentXValue < xMin) {
-			px = 0;
-		} else if (currentXValue > xMax) {
-			px = chartWidth - 1;
-		} else {
-			const frac = (currentXValue - xMin) / (xMax - xMin);
-			px = Math.round(frac * chartWidth);
-		}
-		timeIndicatorX = Math.max(0, Math.min(px, chartWidth - 1));
+		if (!browser || !plotlyLib || !plotlyInstance) return;
+		const indicatorShape = getTimeIndicatorShape(xField, yFields, $timeIndexStore.currentLine);
+		// Only the shapes array is updated; this preserves all zoom/pan state
+		plotlyLib.relayout(plotlyInstance, {
+			shapes: indicatorShape ? [indicatorShape] : []
+		});
 	});
+
+	// Main chart render (never depend on currentLine!
+	// Only depend on data, axes, config, resize, or mount)
+	// (No code change here, just doc to clarify responsibilities)
 
 	// ---------------------------------------------------------------------------
 	// ResizeObserver — drives ALL sizing (initial + subsequent resizes).
@@ -824,50 +841,7 @@
 			></div>
 		{/if}
 
-		<!-- Global time indicator overlay -->
-		<!--
-		Global Time Indicator Overlay
-		- Renders a vertical line at pixel position corresponding to global time index.
-		- Shows pill overlay above line with formatted value.
-		- Both line and pill are visible unless timeIndicatorX === null (uncomputable).
-		- OOB values clamp indicator to chart edge (left/right).
-		-->
-		{#if timeIndicatorX !== null}
-			<div
-				class="pointer-events-none absolute top-0 h-full w-[2px] z-20 bg-fuchsia-500 opacity-70"
-				style="left:{timeIndicatorX}px"
-				aria-label="Global Time Indicator"
-			></div>
-
-			<!-- Pill overlay for indicator label -->
-			<div
-				class="pointer-events-none absolute z-30 px-2 py-0.5 rounded-full bg-fuchsia-200 text-fuchsia-700 text-xs font-medium shadow-md border border-fuchsia-400 select-none"
-				style="left:{timeIndicatorX}px; top:8px; transform:translateX(-50%)"
-				aria-label="Indicator Value Label"
-			>
-				{(() => {
-					// Show value at current global index for selected xField; format for time-like, else show raw.
-					const currentLine = $timeIndexStore.currentLine;
-					const val =
-						currentLine && typeof currentLine[xField] === 'number' ? currentLine[xField] : null;
-					if (val == null || isNaN(val)) return '—';
-					if (isTimeField(xField)) {
-						if (xDisplayMode === 'absolute') {
-							const epoch =
-								currentLine && currentLine.unixtime ? currentLine.unixtime : new Date(0);
-							return formatAbsolute(val, epoch, val);
-						} else if (xDisplayMode === 'relative') {
-							return formatRelative(val);
-						} else {
-							return val.toFixed(3);
-						}
-					} else {
-						// Non-time field: show raw numeric value
-						return val.toFixed(3);
-					}
-				})()}
-			</div>
-		{/if}
+		<!-- (Removed: Global time indicator overlay) Now integrated as Plotly shape that pans/zooms with data. -->
 
 		<!-- Tooltip overlay -->
 		{#if tooltipVisible}
