@@ -2,7 +2,7 @@
 	import { dataStore } from '$lib/stores/dataStore';
 	import { timeIndexStore } from '$lib/stores/time';
 	import type { DataLine, GraphConfig, XDisplayMode } from '$lib/types';
-	import { browser } from '$app/environment';
+	import { browser, dev } from '$app/environment';
 	import { untrack, onMount } from 'svelte'; // onMount is used for browser-only Plotly integration
 	// Plotly import moved to browser-only lifecycle below
 	import { isTimeField, formatRelative, formatAbsolute } from '$lib/timeFormat';
@@ -308,20 +308,22 @@
 	});
 
 	$effect(() => {
-		console.log(
-			'[GraphWidget effect] browser:',
-			browser,
-			'plotlyLib:',
-			plotlyLib,
-			'chartMount:',
-			chartMount,
-			'telemetry:',
-			$dataStore.telemetry.length,
-			'x:',
-			xField,
-			'y:',
-			yFields
-		);
+		if (dev) {
+			console.log(
+				'[GraphWidget effect] browser:',
+				browser,
+				'plotlyLib:',
+				plotlyLib,
+				'chartMount:',
+				chartMount,
+				'telemetry:',
+				$dataStore.telemetry.length,
+				'x:',
+				xField,
+				'y:',
+				yFields
+			);
+		}
 		if (!browser) return;
 		if (!plotlyLib) return;
 		if (!chartMount) return;
