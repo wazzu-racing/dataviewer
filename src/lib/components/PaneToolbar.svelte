@@ -50,7 +50,7 @@
 </script>
 
 <aside
-	class="flex h-full w-14 flex-col items-center gap-1 border-r border-stone-200 bg-stone-50 py-2"
+	class="flex h-full w-16 flex-col items-center gap-2 border-r border-border bg-neutral-50 dark:bg-neutral-900 py-3"
 >
 	{#each PANE_TYPES as { type, label, icon, colorClass } (type)}
 		<button
@@ -60,10 +60,10 @@
 				onAddPane && onAddPane(type);
 			}}
 			title={label}
-			class="flex w-10 cursor-grab flex-col items-center justify-center gap-0.5 rounded p-1.5 text-stone-600 transition-colors active:cursor-grabbing {colorClass}"
+			class="flex w-12 cursor-grab flex-col items-center justify-center gap-0.5 rounded-md p-2 text-zinc-700 dark:text-primary-50 shadow-sm bg-white dark:bg-neutral-800 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100 transition-colors active:cursor-grabbing {colorClass}"
 		>
 			<span class="text-xl leading-none">{icon}</span>
-			<span class="text-[9px] font-medium leading-none">{label}</span>
+			<span class="text-[10px] font-semibold leading-none uppercase tracking-wider">{label}</span>
 		</button>
 	{/each}
 </aside>

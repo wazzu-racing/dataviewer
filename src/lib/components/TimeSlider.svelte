@@ -7,18 +7,20 @@
 	}
 </script>
 
-<div class="w-full h-14 px-4 bg-gray-900 flex items-center gap-4">
-	<label class="text-xs text-gray-300 font-medium">Time</label>
+<div
+	class="w-full h-14 px-4 bg-primary dark:bg-neutral-900 dark:border-t dark:border-neutral-800 flex items-center gap-4 text-white dark:text-neutral-100"
+>
+	<label class="text-xs font-semibold">Time</label>
 	<input
 		type="range"
 		min={$timeIndexStore.minIndex}
 		max={$timeIndexStore.maxIndex}
 		step="1"
 		value={$timeIndexStore.selectedIndex}
-		class="flex-grow mx-2 slider accent-red-500"
+		class="flex-grow mx-2 slider accent-primary"
 		on:input={handleChange}
 	/>
-	<div class="text-xs text-gray-300 font-mono min-w-[100px] text-right">
+	<div class="text-xs font-mono min-w-[100px] text-right opacity-80">
 		Index: {$timeIndexStore.selectedIndex} | {$timeIndexStore.seconds.toFixed(2)}s
 	</div>
 </div>

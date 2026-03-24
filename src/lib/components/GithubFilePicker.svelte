@@ -61,7 +61,7 @@
 
 <!-- Breadcrumb navigation -->
 {#if breadcrumbs.length}
-	<nav class="text-xs mb-2 flex gap-1">
+	<nav class="text-xs mb-2 flex gap-1 dark:text-neutral-300">
 		<span class="breadcrumb" onclick={() => goToFolder('')}>repo root</span>
 		{#each breadcrumbs as crumb, i}
 			<span>/</span>
@@ -73,12 +73,12 @@
 {/if}
 
 {#if loading}
-	<div class="py-6 text-center text-gray-400">Loading...</div>
+	<div class="py-6 text-center text-gray-400 dark:text-neutral-500">Loading...</div>
 {:else if loadingBin}
 	<div class="py-10 flex flex-col items-center justify-center">
 		<span class="mb-2">
 			<svg
-				class="animate-spin h-6 w-6 text-blue-500"
+				class="animate-spin h-6 w-6 text-blue-500 dark:text-blue-400"
 				style="display:inline-block;"
 				xmlns="http://www.w3.org/2000/svg"
 				fill="none"
@@ -89,22 +89,27 @@
 				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
 			</svg>
 		</span>
-		<span class="text-blue-500 text-sm">Loading file...</span>
+		<span class="text-blue-500 dark:text-blue-400 text-sm">Loading file...</span>
 	</div>
 {:else if error}
-	<div class="py-6 text-center text-red-600">{error}</div>
+	<div class="py-6 text-center text-red-600 dark:text-red-400">{error}</div>
 {:else if nodes.length === 0}
-	<div class="py-6 text-center text-gray-700">No folders or .bin files found</div>
+	<div class="py-6 text-center text-gray-700 dark:text-neutral-400">
+		No folders or .bin files found
+	</div>
 {:else}
 	<ul class="space-y-1">
 		{#each nodes as node}
 			{#if node.type === 'dir'}
-				<li class="font-semibold cursor-pointer" onclick={() => goToFolder(node.path)}>
+				<li
+					class="font-semibold cursor-pointer dark:text-neutral-200"
+					onclick={() => goToFolder(node.path)}
+				>
 					📁 {node.name}
 				</li>
 			{:else}
 				<li
-					class="text-blue-600 cursor-pointer"
+					class="text-blue-600 dark:text-blue-400 cursor-pointer"
 					onclick={async () => {
 						if (!node.download_url) return;
 						await onFileSelected(node.download_url);
@@ -123,5 +128,10 @@
 		margin-right: 8px;
 		color: #888;
 		cursor: pointer;
+	}
+	@media (prefers-color-scheme: dark) {
+		.breadcrumb {
+			color: #a3a3a3;
+		}
 	}
 </style>

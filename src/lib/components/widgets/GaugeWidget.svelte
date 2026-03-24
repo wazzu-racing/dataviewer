@@ -181,11 +181,13 @@
 	); // Pie segment for fill arc
 </script>
 
-<div class="flex h-full w-full flex-col items-center justify-start gap-2 p-3">
+<div
+	class="flex h-full w-full flex-col items-center justify-start gap-2 p-4 bg-white dark:bg-neutral-900 ring-1 ring-primary/15 dark:ring-neutral-800 rounded-xl shadow-md"
+>
 	<!-- Field selector -->
 	<select
 		bind:value={selectedField}
-		class="w-full max-w-xs rounded border border-stone-300 bg-white px-2 py-1 text-sm"
+		class="w-full max-w-xs rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
 	>
 		{#each NUMERIC_FIELDS as f (f)}
 			<option value={f}>{prettyLabel(f)}</option>
@@ -193,10 +195,9 @@
 	</select>
 
 	{#if $dataStore.telemetry.length === 0}
-		<p class="mt-4 text-sm text-stone-400">No data loaded</p>
+		<p class="mt-4 text-sm text-neutral-400 dark:text-neutral-500">No data loaded</p>
 	{:else}
 		<!-- SVG arc gauge -->
-		<!-- was 120 height -->
 		<svg
 			viewBox="0 0 210 120"
 			class="w-full max-w-xs"
@@ -204,9 +205,16 @@
 			role="img"
 		>
 			<!-- Background track arc -->
-			<path d={trackPath} fill="none" stroke="#e7e5e4" stroke-width="18" stroke-linecap="round" />
-			<!-- Value fill arc -->
-			<path d={fillPath} fill="none" stroke="#3b82f6" stroke-width="18" stroke-linecap="round" />
+			<path
+				d={trackPath}
+				fill="none"
+				stroke="#e7e5e4"
+				stroke-width="18"
+				stroke-linecap="round"
+				class="dark:stroke-neutral-800"
+			/>
+			<!-- Value fill arc (brand accent!) -->
+			<path d={fillPath} fill="none" stroke="#a60f2d" stroke-width="18" stroke-linecap="round" />
 			<!-- Current value (large, centered) -->
 			<text
 				x={CX}
@@ -215,7 +223,7 @@
 				dominant-baseline="auto"
 				font-size="26"
 				font-weight="bold"
-				fill="#1c1917"
+				class="fill-primary-950 dark:fill-neutral-100"
 				font-family="monospace"
 			>
 				{typeof currentValue === 'number' && isFinite(currentValue) ? currentValue.toFixed(1) : '—'}
@@ -229,6 +237,7 @@
 					dominant-baseline="auto"
 					font-size="11"
 					fill="#a8a29e"
+					class="dark:fill-neutral-400"
 				>
 					{unit}
 				</text>
@@ -242,15 +251,30 @@
 				font-size="10"
 				font-weight="600"
 				fill="#78716c"
+				class="dark:fill-neutral-400"
 			>
 				{prettyLabel(selectedField)}
 			</text>
 			<!-- Min label (left end of arc) -->
-			<text x="14" y="118" text-anchor="middle" font-size="9" fill="#a8a29e">
+			<text
+				x="14"
+				y="118"
+				text-anchor="middle"
+				font-size="9"
+				fill="#a8a29e"
+				class="dark:fill-neutral-400"
+			>
 				{typeof minVal === 'number' && isFinite(minVal) ? minVal.toFixed(1) : '—'}
 			</text>
 			<!-- Max label (right end of arc) -->
-			<text x="186" y="118" text-anchor="middle" font-size="9" fill="#a8a29e">
+			<text
+				x="186"
+				y="118"
+				text-anchor="middle"
+				font-size="9"
+				fill="#a8a29e"
+				class="dark:fill-neutral-400"
+			>
 				{typeof maxVal === 'number' && isFinite(maxVal) ? maxVal.toFixed(1) : '—'}
 			</text>
 		</svg>

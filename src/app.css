@@ -1,4 +1,50 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+html {
+	font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	background-color: #f8fafc;
+	color: #23272f;
+	min-height: 100vh;
+}
+
+@media (prefers-color-scheme: dark) {
+	html {
+		background-color: #0a0a0a;
+		color: #f4f4f5;
+	}
+}
+
+body {
+	min-height: 100vh;
+	font-size: 16px;
+}
+
+/* Modern scrollbars */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #a60f2d #f8fafc;
+}
+*::-webkit-scrollbar {
+	height: 8px;
+	width: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: #f8fafc;
+}
+*::-webkit-scrollbar-thumb {
+	background: #a60f2d;
+	border-radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+	* {
+		scrollbar-color: #a60f2d #18181b;
+	}
+	*::-webkit-scrollbar-track {
+		background: #18181b;
+	}
+}
 
 /* Brute-force suppress all leaflet overlays when modal is open */
 .modal-open .leaflet-pane,
@@ -9,4 +55,16 @@
 .modal-open .leaflet-tooltip {
 	z-index: 1 !important;
 	pointer-events: none !important;
+}
+
+/* --- DARK MODE LEAFLET TOOLTIP/POPUP OVERRIDES --- */
+.dark .leaflet-tooltip,
+.dark .leaflet-popup-content {
+	background: #23272f !important;
+	color: #f4f4f5 !important;
+	border-color: #a60f2d !important;
+}
+.dark .leaflet-tooltip {
+	box-shadow: 0 2px 8px 0 rgba(16, 30, 54, 0.16);
+	font-weight: 600;
 }
