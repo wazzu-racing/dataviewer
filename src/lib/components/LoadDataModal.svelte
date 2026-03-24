@@ -35,13 +35,15 @@
 
 <!-- Backdrop -->
 <div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+	class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Load Data"
 >
 	<!-- Card -->
-	<div class="relative w-full max-w-sm rounded-xl border border-stone-200 bg-white shadow-2xl">
+	<div
+		class="relative w-full max-w-sm rounded-xl border border-stone-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-2xl"
+	>
 		<!-- ReadData fills the card -->
 		<div class="min-h-56">
 			<ReadData bind:this={readData} {onDismiss} />
@@ -50,12 +52,12 @@
 		<div class="min-h-56">
 			<button
 				onclick={loadFromGithub}
-				class="w-full mt-3 mb-3 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600 text-base font-semibold"
+				class="w-full mt-3 mb-3 px-4 py-2 rounded bg-blue-500 dark:bg-blue-600 text-white hover:bg-blue-600 dark:hover:bg-blue-700 text-base font-semibold"
 			>
 				{showGithubPicker ? 'Hide Github Files' : 'Load from Github'}
 			</button>
 			{#if showGithubPicker}
-				<div class="mt-2 mb-4 max-h-64 overflow-y-auto border rounded">
+				<div class="mt-2 mb-4 max-h-64 overflow-y-auto border dark:border-neutral-700 rounded">
 					<GithubFilePicker onFileSelected={handleGithubFile} {loadingBin} />
 				</div>
 			{/if}
@@ -64,12 +66,12 @@
 		<!-- Items loaded + Done button, only after telemetry is parsed -->
 		{#if globalData.lines.length > 0}
 			<div class="w-full py-2">
-				<p class="text-center text-sm text-emerald-600 mb-2">
+				<p class="text-center text-sm text-emerald-600 dark:text-emerald-400 mb-2">
 					{globalData.lines.length.toLocaleString()} items loaded
 				</p>
 				<button
 					onclick={onDismiss}
-					class="w-full px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700"
+					class="w-full px-4 py-2 rounded bg-blue-600 dark:bg-blue-700 text-white font-semibold hover:bg-blue-700 dark:hover:bg-blue-800"
 				>
 					Done
 				</button>

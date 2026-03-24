@@ -115,15 +115,16 @@
 	// ---------------------------------------------------------------------------
 	// Color palette for multi-series
 	// ---------------------------------------------------------------------------
+	// Wazzu theme series, a60f2d is primary accent
 	const SERIES_COLORS = [
-		'#3b82f6', // blue
+		'#a60f2d', // primary accent
 		'#f97316', // orange
+		'#3b82f6', // blue
 		'#22c55e', // green
 		'#ef4444', // red
 		'#a855f7', // purple
 		'#eab308', // yellow
-		'#06b6d4', // cyan
-		'#ec4899' // pink
+		'#06b6d4' // cyan
 	];
 
 	function prettyLabel(field: string): string {
@@ -307,7 +308,30 @@
 		})();
 	});
 
+	// Track dark mode state reactively
+	let isDarkMode = $state(false);
+
 	$effect(() => {
+		if (!browser) return;
+
+		// Check initial state
+		isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+		// Listen for theme changes
+		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+		const handler = (e: MediaQueryListEvent) => {
+			isDarkMode = e.matches;
+		};
+		mediaQuery.addEventListener('change', handler);
+
+		return () => {
+			mediaQuery.removeEventListener('change', handler);
+		};
+	});
+
+	$effect(() => {
+		const darkMode = isDarkMode;
+
 		if (dev) {
 			console.log(
 				'[GraphWidget effect] browser:',
@@ -321,13 +345,17 @@
 				'x:',
 				xField,
 				'y:',
-				yFields
+				yFields,
+				'darkMode:',
+				darkMode
 			);
 		}
 		if (!browser) return;
 		if (!plotlyLib) return;
 		if (!chartMount) return;
 		if (!$dataStore.telemetry.length) return;
+
+		// Detect Tailwind dark mode from html classList.
 
 		const lines = $dataStore.telemetry;
 		const x = xField;
@@ -364,33 +392,81 @@
 
 		const layout: any = {
 			margin: { l: 40, r: 40, t: 16, b: 40 },
-			legend: { orientation: 'h', y: -0.2 },
+			legend: {
+				orientation: 'h',
+				y: -0.2,
+				font: { color: darkMode ? '#f4f4f5' : '#18181b', size: 13 },
+				bgcolor: darkMode ? '#18181b' : '#fff',
+				borderwidth: 0
+			},
+			paper_bgcolor: darkMode ? '#18181b' : '#fff', // dark: neutral-900, light: white
+			plot_bgcolor: darkMode ? '#18181b' : '#fff',
 			xaxis: {
-				title: prettyLabel(x),
-				showgrid: true
+				title: { text: prettyLabel(x), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
+				showgrid: true,
+				color: darkMode ? '#f4f4f5' : '#27272a', // axis, ticks
+				tickcolor: darkMode ? '#8a8a8a' : '#bababa',
+				tickfont: { color: darkMode ? '#f4f4f5' : '#18181b' },
+				gridcolor: darkMode ? '#23272f' : '#e5e7eb',
+				zerolinecolor: darkMode ? '#30333b' : '#bababa',
+				linecolor: darkMode ? '#23272f' : '#bababa',
+				showline: true
 			},
 			yaxis: {
-				title: prettyLabel(ys[0]),
+				title: { text: prettyLabel(ys[0]), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
 				showgrid: true,
-				color: SERIES_COLORS[0]
+				color: darkMode ? '#f4f4f5' : '#27272a', // axis, ticks
+				tickcolor: darkMode ? '#8a8a8a' : '#bababa',
+				tickfont: { color: darkMode ? '#f4f4f5' : '#18181b' },
+				gridcolor: darkMode ? '#23272f' : '#e5e7eb',
+				zerolinecolor: darkMode ? '#30333b' : '#bababa',
+				linecolor: darkMode ? '#23272f' : '#bababa',
+				showline: true
+			},
+			font: {
+				family: 'Inter, ui-sans-serif, system-ui, sans-serif',
+				color: darkMode ? '#f4f4f5' : '#18181b',
+				size: 13
 			},
 			showlegend: false,
-			dragmode: 'pan'
+			dragmode: 'pan',
+			hoverlabel: {
+				bgcolor: darkMode ? '#23272f' : '#fff',
+				bordercolor: darkMode ? '#a60f2d' : '#bababa',
+				font: { color: darkMode ? '#f4f4f5' : '#18181b' }
+			},
+			modebar: {
+				bgcolor: darkMode ? '#18181b' : '#fff',
+				color: darkMode ? '#f4f4f5' : '#18181b',
+				activecolor: darkMode ? '#a60f2d' : '#f47521'
+			}
 		};
 
 		if (ys.length > 1) {
 			layout.yaxis2 = {
-				title: prettyLabel(ys.slice(1).join(', ')),
+				title: {
+					text: prettyLabel(ys.slice(1).join(', ')),
+					font: { color: darkMode ? '#f4f4f5' : '#27272a' }
+				},
 				showgrid: false,
 				overlaying: 'y',
 				side: 'right',
-				color: SERIES_COLORS[1]
+				color: darkMode ? '#f4f4f5' : '#27272a',
+				tickcolor: darkMode ? '#8a8a8a' : '#bababa',
+				tickfont: { color: darkMode ? '#f4f4f5' : '#18181b' },
+				linecolor: darkMode ? '#23272f' : '#bababa',
+				showline: true
 			};
 		}
 
 		// Initial render: set time indicator to current (safe, no future dependency on time)
 		const indicatorShape = getTimeIndicatorShape(x, ys, undefined); // Don't depend on currentLine
 		layout.shapes = indicatorShape ? [indicatorShape] : [];
+
+		// If theme changed (dark/light), forcibly purge and re-render so modebar/toolbars/theme update
+		if (plotlyInstance && plotlyInstance.layout) {
+			plotlyLib.purge(chartMount);
+		}
 
 		plotlyLib.react(chartMount, traces, layout, { responsive: true });
 		plotlyInstance = chartMount;
@@ -670,15 +746,21 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="flex h-full w-full flex-col overflow-hidden">
+<div
+	class="flex h-full w-full flex-col overflow-hidden rounded-xl shadow-md bg-white dark:bg-neutral-900 ring-1 ring-primary/15 focus-within:ring-2 focus-within:ring-primary"
+>
 	<!-- Controls -->
-	<div class="flex shrink-0 items-center gap-2 border-b border-stone-200 bg-stone-50 px-2 py-1">
+	<div
+		class="flex shrink-0 items-center gap-2 border-b border-primary/10 dark:border-neutral-800 bg-primary/5 dark:bg-neutral-800 px-4 py-2 rounded-t-xl text-primary-900 dark:text-neutral-100"
+	>
 		<!-- X axis selector -->
-		<label class="flex items-center gap-1 text-xs text-stone-600">
+		<label
+			class="flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
+		>
 			X
 			<select
 				bind:value={xField}
-				class="rounded border border-stone-300 bg-white px-1 py-0.5 text-xs"
+				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
 			>
 				{#each NUMERIC_FIELDS as f (f)}
 					<option value={f}>{prettyLabel(f)}</option>
@@ -688,11 +770,13 @@
 
 		<!-- Timestamp display mode toggle — only shown for time-based x fields -->
 		{#if isTimeField(xField)}
-			<label class="flex items-center gap-1 text-xs text-stone-600">
+			<label
+				class="flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
+			>
 				<select
 					bind:value={xDisplayMode}
 					onchange={notifyConfigChange}
-					class="rounded border border-stone-300 bg-white px-1 py-0.5 text-xs"
+					class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
 				>
 					<option value="raw">Raw</option>
 					<option value="relative">Relative</option>
@@ -702,30 +786,32 @@
 		{/if}
 
 		<!-- Y series multi-select dropdown -->
-		<div class="relative flex items-center gap-1 text-xs text-stone-600">
+		<div
+			class="relative flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
+		>
 			<span>Y</span>
 			<div class="relative">
 				<button
 					onclick={() => (yDropdownOpen = !yDropdownOpen)}
-					class="flex items-center gap-1 rounded border border-stone-300 bg-white px-1 py-0.5 text-xs hover:bg-stone-50"
+					class="flex items-center gap-1 rounded-lg border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1 text-xs font-semibold shadow-sm hover:bg-primary/10 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 transition"
 				>
 					<!-- Color swatches for selected fields -->
 					{#each yFields as f, i (f)}
 						<span
-							class="inline-block h-2 w-2 rounded-full"
+							class="inline-block h-2 w-2 rounded-full border border-primary/20 bg-primary/40"
 							style="background:{SERIES_COLORS[i % SERIES_COLORS.length]}"
 						></span>
 					{/each}
-					<span class="ml-0.5 text-stone-700"
+					<span class="ml-1 text-primary-900 dark:text-neutral-100"
 						>{yFields.length === 1 ? prettyLabel(yFields[0]) : `${yFields.length} series`}</span
 					>
-					<span class="text-stone-400">▾</span>
+					<span class="text-primary-400 dark:text-neutral-400">▾</span>
 				</button>
 
 				{#if yDropdownOpen}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
-						class="absolute left-0 top-full z-50 mt-0.5 max-h-64 w-48 overflow-y-auto rounded border border-stone-200 bg-white shadow-lg"
+						class="absolute left-0 top-full z-50 mt-2 max-h-64 w-52 overflow-y-auto rounded-xl border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg py-1"
 						onmouseleave={() => (yDropdownOpen = false)}
 					>
 						{#each NUMERIC_FIELDS as f (f)}
@@ -733,12 +819,16 @@
 							{@const idx = yFields.indexOf(f)}
 							<button
 								onclick={() => toggleYField(f)}
-								class="flex w-full items-center gap-2 px-2 py-1 text-left text-xs hover:bg-stone-50 {selected
-									? 'font-medium text-stone-800'
-									: 'text-stone-600'}"
+								class="flex w-full items-center gap-2 px-2 py-1 text-left text-xs transition
+										font-semibold
+										hover:bg-primary/10 dark:hover:bg-primary/20
+										focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70
+										{selected
+									? 'text-primary-900 dark:text-neutral-100 bg-primary/5 dark:bg-primary/15'
+									: 'text-neutral-700 dark:text-neutral-300'}"
 							>
 								<span
-									class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-stone-300"
+									class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-primary/20 bg-primary/30"
 									style={selected ? `background:${SERIES_COLORS[idx % SERIES_COLORS.length]}` : ''}
 								></span>
 								{prettyLabel(f)}
@@ -751,7 +841,7 @@
 
 		<div class="ml-auto flex items-center gap-2">
 			{#if $dataStore.telemetry.length > 0}
-				<span class="text-xs text-stone-400">
+				<span class="text-xs text-stone-400 dark:text-neutral-400">
 					{$dataStore.telemetry.length.toLocaleString()} pts
 				</span>
 			{/if}
@@ -766,7 +856,9 @@
 		onpointerleave={onPointerLeaveMarginZoom}
 	>
 		{#if $dataStore.telemetry.length === 0}
-			<div class="flex h-full items-center justify-center text-sm text-stone-400">
+			<div
+				class="flex h-full items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
+			>
 				No data loaded — use a Load Data pane to import a file
 			</div>
 		{/if}
@@ -775,22 +867,22 @@
 		<div bind:this={chartMount} class="absolute inset-0"></div>
 		{#if zoomMarginHover === 'left'}
 			<div
-				class="pointer-events-none absolute left-0 top-0 h-full z-30"
-				style="width:24px; background:rgba(59,130,246,0.11); border-radius:6px 0 0 6px;"
+				class="pointer-events-none absolute left-0 top-0 h-full z-30 rounded-l-lg bg-primary/10"
+				style="width:24px;"
 				aria-hidden="true"
 			></div>
 		{/if}
 		{#if zoomMarginHover === 'right' && yFields.length > 1}
 			<div
-				class="pointer-events-none absolute right-0 top-0 h-full z-30"
-				style="width:24px; background:rgba(236,72,153,0.10); border-radius:0 6px 6px 0;"
+				class="pointer-events-none absolute right-0 top-0 h-full z-30 rounded-r-lg bg-primary/15"
+				style="width:24px;"
 				aria-hidden="true"
 			></div>
 		{/if}
 		{#if zoomMarginHover === 'bottom'}
 			<div
-				class="pointer-events-none absolute left-0 bottom-0 w-full z-30"
-				style="height:24px; background:rgba(16,185,129,0.07); border-radius:0 0 6px 6px;"
+				class="pointer-events-none absolute left-0 bottom-0 w-full z-30 rounded-b-lg bg-primary/10"
+				style="height:24px;"
 				aria-hidden="true"
 			></div>
 		{/if}
@@ -800,22 +892,23 @@
 		<!-- Tooltip overlay -->
 		{#if tooltipVisible}
 			<div
-				class="pointer-events-none absolute z-10 min-w-32 rounded border border-stone-200 bg-white/90 px-2 py-1.5 shadow-md backdrop-blur-sm"
+				class="pointer-events-none absolute z-10 min-w-32 rounded-lg border border-primary/20 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/95 px-2 py-1.5 shadow-lg backdrop-blur-sm"
 				style="left:{tooltipX}px; top:{tooltipY}px; transform: translateX({tooltipFlipped
 					? '-100%'
 					: '0'}) translateY(-50%)"
 			>
-				<div class="mb-1 text-xs font-medium text-stone-500">
-					{tooltipXLabel}: <span class="text-stone-800">{tooltipXValue}</span>
+				<div class="mb-1 text-xs font-semibold text-primary-700 dark:text-neutral-200">
+					{tooltipXLabel}:
+					<span class="text-primary-900 dark:text-neutral-100">{tooltipXValue}</span>
 				</div>
 				{#each tooltipEntries as entry (entry.label)}
 					<div class="flex items-center gap-1.5 text-xs">
 						<span
-							class="inline-block h-2 w-2 shrink-0 rounded-full"
+							class="inline-block h-2 w-2 shrink-0 rounded-full border border-primary/30 bg-primary/40"
 							style="background:{entry.color}"
 						></span>
-						<span class="text-stone-500">{entry.label}:</span>
-						<span class="font-medium text-stone-800">{entry.value}</span>
+						<span class="text-primary-800 dark:text-neutral-200">{entry.label}:</span>
+						<span class="font-semibold text-primary-950 dark:text-neutral-100">{entry.value}</span>
 					</div>
 				{/each}
 			</div>

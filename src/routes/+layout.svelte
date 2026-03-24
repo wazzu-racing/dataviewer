@@ -16,12 +16,14 @@
 	<link rel="manifest" href="{base}/manifest.webmanifest" />
 </svelte:head>
 
-<div class="h-screen flex flex-col overflow-y-hidden">
+<div
+	class="h-screen flex flex-col overflow-y-hidden bg-neutral-50 dark:bg-neutral-950 font-sans text-base text-zinc-900 dark:text-primary-50"
+>
 	<main class="flex-1 min-h-0 flex flex-col overflow-hidden">
 		{@render children()}
 	</main>
 	<!-- Sticky time slider now at bottom -->
-	<div class="sticky bottom-0 z-20 bg-white h-14 shadow-sm flex items-stretch">
+	<div class="sticky bottom-0 z-20 bg-card dark:bg-neutral-900 h-14 shadow-sm flex items-stretch">
 		<TimeSlider />
 	</div>
 </div>

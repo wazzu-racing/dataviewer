@@ -168,30 +168,38 @@
 	}
 </script>
 
-<div class="flex h-full w-full flex-col overflow-hidden text-xs">
+<div
+	class="flex h-full w-full flex-col overflow-hidden text-xs rounded-xl shadow-md bg-white dark:bg-neutral-900 ring-1 ring-primary/15 dark:ring-neutral-800 focus-within:ring-2 focus-within:ring-primary"
+>
 	<!-- Toolbar -->
-	<div class="flex shrink-0 items-center gap-2 border-b border-stone-200 bg-stone-50 px-2 py-1">
-		<span class="text-stone-500">{totalRows.toLocaleString()} rows</span>
+	<div
+		class="flex shrink-0 items-center gap-2 border-b border-primary/10 dark:border-neutral-800 bg-primary/5 dark:bg-neutral-800 px-4 py-2 rounded-t-xl text-primary-900 dark:text-neutral-100"
+	>
+		<span class="text-primary-700 dark:text-neutral-300 font-semibold"
+			>{totalRows.toLocaleString()} rows</span
+		>
 		<div class="relative ml-auto">
 			<button
 				onclick={() => (showColumnPicker = !showColumnPicker)}
-				class="rounded border border-stone-300 bg-white px-2 py-0.5 text-xs hover:bg-stone-100"
+				class="rounded-lg border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1 text-xs font-semibold shadow-sm hover:bg-primary/10 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 transition"
 			>
 				Columns ▾
 			</button>
 			{#if showColumnPicker}
 				<div
-					class="absolute right-0 top-full z-50 mt-1 max-h-64 w-44 overflow-y-auto rounded border border-stone-200 bg-white shadow-lg"
+					class="absolute right-0 top-full z-50 mt-2 max-h-64 w-48 overflow-y-auto rounded-xl border border-primary/15 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg py-1"
 				>
 					{#each ALL_COLUMNS as col (col)}
-						<label class="flex cursor-pointer items-center gap-2 px-2 py-1 hover:bg-stone-50">
+						<label
+							class="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-primary/5 dark:hover:bg-neutral-700 rounded"
+						>
 							<input
 								type="checkbox"
 								checked={visibleColumns.includes(col)}
 								onchange={() => toggleColumn(col)}
-								class="accent-blue-500"
+								class="accent-primary focus-visible:ring-2 focus-visible:ring-primary"
 							/>
-							<span>{col}</span>
+							<span class="text-xs text-primary-900 dark:text-neutral-200">{col}</span>
 						</label>
 					{/each}
 				</div>
@@ -200,16 +208,24 @@
 	</div>
 
 	{#if totalRows === 0}
-		<div class="flex flex-1 items-center justify-center text-stone-400">
-			No data loaded — use a Load Data pane to import a file
+		<div class="flex flex-1 items-center justify-center text-neutral-400 dark:text-neutral-500">
+			No data loaded — use a <span class="font-semibold text-primary-600 dark:text-primary-400"
+				>Load Data</span
+			> pane to import a file
 		</div>
 	{:else}
 		<!-- Sticky header -->
-		<div class="shrink-0 border-b border-stone-200 bg-stone-100">
+		<div
+			class="shrink-0 border-b border-primary/15 dark:border-neutral-800 bg-primary/10 dark:bg-neutral-800 text-primary-900 dark:text-neutral-100"
+		>
 			<div class="flex">
-				<div class="w-14 shrink-0 px-2 py-1 font-semibold text-stone-500">#</div>
+				<div class="w-14 shrink-0 px-3 py-2 font-bold text-primary-700 dark:text-neutral-300">
+					#
+				</div>
 				{#each visibleColumns as col (col)}
-					<div class="w-28 shrink-0 px-2 py-1 font-semibold text-stone-700">{col}</div>
+					<div class="w-28 shrink-0 px-3 py-2 font-bold text-primary-800 dark:text-neutral-200">
+						{col}
+					</div>
 				{/each}
 			</div>
 		</div>
@@ -225,17 +241,21 @@
 				<div style="transform: translateY({offsetY}px);">
 					{#each visibleRows as row, i (startIdx + i)}
 						<div
-							class="flex border-b border-stone-100 hover:bg-blue-50 {nearestRowIdx === startIdx + i
-								? 'bg-fuchsia-100 font-bold ring-2 ring-fuchsia-400'
-								: (startIdx + i) % 2 === 0
-									? ''
-									: 'bg-stone-50'}"
+							class={`flex border-b border-primary/5 dark:border-neutral-800 transition group rounded-md mx-1 my-0.5
+								hover:bg-primary/5 dark:hover:bg-neutral-800 focus-within:bg-primary/10 dark:focus-within:bg-neutral-700
+								${nearestRowIdx === startIdx + i ? 'bg-primary/20 dark:bg-primary/30 font-bold ring-2 ring-primary/50' : (startIdx + i) % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-primary/5 dark:bg-neutral-900/60'}`}
 							style="height:{ROW_HEIGHT}px;"
 							aria-label={nearestRowIdx === startIdx + i ? 'Global time row' : undefined}
 						>
-							<div class="w-14 shrink-0 px-2 py-1 text-stone-400">{startIdx + i}</div>
+							<div
+								class="w-14 shrink-0 px-3 py-2 text-primary-500 dark:text-neutral-400 group-hover:text-primary-700 dark:group-hover:text-neutral-300"
+							>
+								{startIdx + i}
+							</div>
 							{#each visibleColumns as col (col)}
-								<div class="w-28 shrink-0 overflow-hidden px-2 py-1 text-stone-700">
+								<div
+									class="w-28 shrink-0 overflow-hidden px-3 py-2 text-neutral-900 dark:text-neutral-200 group-hover:text-primary-800 dark:group-hover:text-neutral-100"
+								>
 									{fmt(row[col])}
 								</div>
 							{/each}

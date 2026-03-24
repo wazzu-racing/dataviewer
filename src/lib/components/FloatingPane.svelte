@@ -36,7 +36,7 @@
 		bounds: 'parent',
 		defaultPosition: { x: pane.x, y: pane.y }
 	}}
-	class="absolute flex flex-col overflow-hidden rounded-lg border border-stone-300 bg-white shadow-xl"
+	class="absolute flex flex-col overflow-hidden rounded-lg border border-border dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-card"
 	style="width:{width}px; height:{height}px; z-index:{pane.zIndex}; resize:both; min-width:200px; min-height:140px;"
 	onmousedown={() => onFocus(pane.id)}
 	role="dialog"
@@ -45,22 +45,22 @@
 >
 	<!-- Title bar (drag handle) -->
 	<div
-		class="drag-handle flex shrink-0 cursor-grab items-center gap-1 border-b border-stone-200 bg-stone-100 px-2 py-1 active:cursor-grabbing"
+		class="drag-handle flex shrink-0 cursor-grab items-center gap-1 border-b border-border dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 px-3 py-1 active:cursor-grabbing"
 	>
-		<span class="flex-1 select-none text-xs font-medium text-stone-600">
+		<span class="flex-1 select-none text-xs font-semibold text-primary-900 dark:text-neutral-100">
 			{WIDGET_LABELS[pane.type]}
 		</span>
 		<button
 			onclick={() => onDock(pane.id)}
 			title="Dock into tiled layout"
-			class="rounded px-1 py-0.5 text-xs text-stone-400 hover:bg-stone-200 hover:text-stone-700"
+			class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
 		>
 			⬢
 		</button>
 		<button
 			onclick={() => onClose(pane.id)}
 			title="Close"
-			class="rounded px-1 py-0.5 text-xs text-stone-400 hover:bg-red-100 hover:text-red-600"
+			class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
 		>
 			✕
 		</button>

@@ -74,36 +74,38 @@
 			{#if i < (layout.panes?.length ?? 0) - 1}
 				<PaneResizer
 					class={layout.type === 'horizontal'
-						? 'w-1 cursor-col-resize bg-stone-200 transition-colors hover:bg-blue-400 active:bg-blue-500'
-						: 'h-1 cursor-row-resize bg-stone-200 transition-colors hover:bg-blue-400 active:bg-blue-500'}
+						? 'w-1 cursor-col-resize bg-border dark:bg-neutral-800 transition-colors hover:bg-primary/40 active:bg-primary/60'
+						: 'h-1 cursor-row-resize bg-border dark:bg-neutral-800 transition-colors hover:bg-primary/40 active:bg-primary/60'}
 				/>
 			{/if}
 		{/each}
 	</PaneGroup>
 {:else}
 	<!-- Leaf / widget node -->
-	<div class="flex h-full w-full flex-col overflow-hidden border border-stone-200 bg-white">
+	<div
+		class="flex h-full w-full flex-col overflow-hidden border border-border dark:border-neutral-800 rounded-lg shadow-card bg-card dark:bg-neutral-900"
+	>
 		<!-- Title bar -->
 		<div
-			class="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-100 px-2 py-0.5"
+			class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
 			draggable={canMove}
 			ondragstart={handleDragStart}
 			ondragend={handleDragEnd}
 		>
-			<span class="flex-1 text-xs font-medium text-stone-600">
+			<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
 				{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
 			</span>
 			<button
 				onclick={() => onPopOut(layout.id)}
 				title="Pop out into floating window"
-				class="rounded px-1 py-0.5 text-xs text-stone-400 hover:bg-stone-200 hover:text-stone-700"
+				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
 			>
 				⬡
 			</button>
 			<button
 				onclick={() => onRemove(layout.id)}
 				title="Close pane"
-				class="rounded px-1 py-0.5 text-xs text-stone-400 hover:bg-red-100 hover:text-red-600"
+				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
 			>
 				✕
 			</button>
