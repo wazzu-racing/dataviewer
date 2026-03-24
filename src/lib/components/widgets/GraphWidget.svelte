@@ -245,6 +245,8 @@
 	let container: HTMLDivElement | undefined = $state(); // chart-area div (below controls bar)
 	let chartMount: HTMLDivElement | undefined = $state(); // Plotly chart mount
 	let plotlyInstance: any = $state(null); // Plotly chart reference
+	// Sentinel null = not yet rendered; set to the theme value after first render.
+	let lastRenderedDarkMode: boolean | null = null;
 
 	/** Returns the pixel dimensions available for the chart. */
 	function plotSize(): { width: number; height: number } {
@@ -463,10 +465,14 @@
 		const indicatorShape = getTimeIndicatorShape(x, ys, undefined); // Don't depend on currentLine
 		layout.shapes = indicatorShape ? [indicatorShape] : [];
 
-		// If theme changed (dark/light), forcibly purge and re-render so modebar/toolbars/theme update
-		if (plotlyInstance && plotlyInstance.layout) {
+		// Only purge and re-create when the theme (dark/light) has actually changed,
+		// so data/config updates avoid unnecessary flicker and extra work.
+		// lastRenderedDarkMode is null on first render — skip purge and let react() handle initial paint.
+		const themeChanged = lastRenderedDarkMode !== null && lastRenderedDarkMode !== darkMode;
+		if (themeChanged && plotlyInstance && plotlyInstance.layout) {
 			plotlyLib.purge(chartMount);
 		}
+		lastRenderedDarkMode = darkMode;
 
 		plotlyLib.react(chartMount, traces, layout, { responsive: true });
 		plotlyInstance = chartMount;
