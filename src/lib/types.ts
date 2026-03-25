@@ -61,11 +61,23 @@ export const NUM_FIELDS = 48;
 /** How the x-axis is labelled when a time-based field is selected */
 export type XDisplayMode = 'raw' | 'relative' | 'absolute';
 
-/** Per-pane configuration for the Graph widget */
+/** Type of 3D visualization mode */
+export type Graph3DMode = '3d-scatter' | '3d-surface';
+
+/**
+ * Per-pane configuration for the Graph widget.
+ * Supports both 2D and 3D graph modes.
+ */
 export type GraphConfig = {
 	xField: string; // e.g. 'time'
 	yFields: string[]; // e.g. ['rpm', 'tps']
 	xDisplayMode?: XDisplayMode; // how x-axis labels are formatted for time fields
+	/** When true, renders as 3D graph instead of 2D */
+	is3D?: boolean;
+	/** Z-axis fields for 3D mode (multiple fields supported like yFields) */
+	zFields?: string[];
+	/** Type of 3D visualization: scatter (points/lines) or surface (heatmap) */
+	mode3D?: Graph3DMode;
 };
 
 /** Per-pane configuration for the Gauge widget */
