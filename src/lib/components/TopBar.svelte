@@ -9,6 +9,7 @@
 		onLayoutSelect: (layoutId: string) => void;
 		onSaveLayout: () => void;
 		onManageLayouts: () => void;
+		onOpenCommands: () => void;
 	};
 
 	let {
@@ -17,7 +18,8 @@
 		currentLayoutId,
 		onLayoutSelect,
 		onSaveLayout,
-		onManageLayouts
+		onManageLayouts,
+		onOpenCommands
 	}: Props = $props();
 </script>
 
@@ -26,6 +28,26 @@
 	class="w-full h-16 bg-primary dark:bg-neutral-900 text-white shadow-card flex items-center justify-between px-6 select-none dark:border-b dark:border-neutral-800"
 >
 	<div class="flex gap-3 items-center">
+		<button
+			class="bg-white dark:bg-neutral-800 text-primary dark:text-primary hover:bg-background hover:dark:bg-neutral-700 hover:text-primary border border-primary dark:border-neutral-700 rounded-md px-3 py-1.5 transition-colors shadow-card disabled:opacity-50 flex items-center gap-2"
+			onclick={onOpenCommands}
+			title="Open Command Palette (Ctrl+Shift+P)"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.5"
+				stroke-linecap="round"
+				stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg
+			>
+			<span class="text-sm font-semibold">Search</span>
+		</button>
+
+		<div class="h-6 w-px bg-white/20 mx-1"></div>
+
 		<button
 			class="bg-white dark:bg-neutral-800 text-primary dark:text-primary hover:bg-background hover:dark:bg-neutral-700 hover:text-primary border border-primary dark:border-neutral-700 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors shadow-card disabled:opacity-50"
 			onclick={openChildWindow}

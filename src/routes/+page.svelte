@@ -44,9 +44,11 @@
 	import SaveLayoutModal from '$lib/components/SaveLayoutModal.svelte';
 	import ManageLayoutsModal from '$lib/components/ManageLayoutsModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
+	import CommandPalette from '$lib/components/CommandPalette.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
 	import { dataStore } from '$lib/stores/dataStore';
+	import type { Command } from '$lib/types';
 
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
@@ -360,7 +362,74 @@
 	function handleManageLayoutsClick() {
 		showManageLayoutsModal = true;
 	}
+
+	// ---------------------------------------------------------------------------
+	// Command Palette
+	// ---------------------------------------------------------------------------
+	let showCommandPalette = $state(false);
+
+	const staticCommands: Command[] = [
+		{
+			id: 'new-window',
+			label: 'New Window',
+			description: 'Open a new dashboard window',
+			action: createChildWindow
+		},
+		{
+			id: 'save-layout',
+			label: 'Save Layout',
+			description: 'Save the current tiled and floating arrangement',
+			shortcut: 'Ctrl+S',
+			action: handleSaveLayoutClick
+		},
+		{
+			id: 'manage-layouts',
+			label: 'Manage Layouts',
+			description: 'Rename, duplicate, or delete saved layouts',
+			action: handleManageLayoutsClick
+		},
+		{
+			id: 'load-data',
+			label: 'Load Data',
+			description: 'Open the data import modal',
+			action: () => (showLoadDataModal = true)
+		}
+	];
+
+	let commands = $derived.by(() => {
+		const layoutCommands: Command[] = layouts.map((l) => ({
+			id: `load-layout-${l.id}`,
+			label: `Switch to: ${l.name}`,
+			description: `Load the "${l.name}" layout`,
+			category: 'Layouts',
+			action: () => handleLoadLayout(l.id)
+		}));
+
+		const widgetCommands: Command[] = [
+			{ id: 'add-graph', label: 'Add Widget: Graph', action: () => handleAddPane('graph') },
+			{ id: 'add-map', label: 'Add Widget: Map', action: () => handleAddPane('map') },
+			{ id: 'add-table', label: 'Add Widget: Table', action: () => handleAddPane('table') },
+			{ id: 'add-gauge', label: 'Add Widget: Gauge', action: () => handleAddPane('gauge') }
+		];
+
+		return [...staticCommands, ...layoutCommands, ...widgetCommands];
+	});
+
+	function handleGlobalKeydown(e: KeyboardEvent) {
+		// Ctrl+Shift+P or Cmd+Shift+P
+		if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+			e.preventDefault();
+			showCommandPalette = !showCommandPalette;
+		}
+		// Ctrl+S for Save
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+			e.preventDefault();
+			handleSaveLayoutClick();
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="flex flex-col w-full flex-1 min-h-0 overflow-hidden bg-stone-100">
 	<TopBar
@@ -370,6 +439,7 @@
 		onLayoutSelect={handleLoadLayout}
 		onSaveLayout={handleSaveLayoutClick}
 		onManageLayouts={handleManageLayoutsClick}
+		onOpenCommands={() => (showCommandPalette = true)}
 	/>
 	<div class="flex flex-1 overflow-hidden">
 		<PaneToolbar onAddPane={handleAddPane} />
@@ -431,3 +501,9 @@
 		}}
 	/>
 {/if}
+
+<CommandPalette
+	bind:isOpen={showCommandPalette}
+	{commands}
+	onClose={() => (showCommandPalette = false)}
+/>

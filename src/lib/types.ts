@@ -146,3 +146,17 @@ export type LayoutStoreData = {
 	activeLayoutId: string | null;
 	autoSaveEnabled: boolean;
 };
+
+// ---------------------------------------------------------------------------
+// Command Palette Types
+// ---------------------------------------------------------------------------
+
+/** A command that can be executed from the command palette */
+export type Command = {
+	id: string;
+	label: string;
+	description?: string;
+	shortcut?: string;
+	action: () => void;
+	category?: string;
+};
