@@ -59,8 +59,6 @@
 		return defaultLayout();
 	}
 
-	const VALID_WIDGET_TYPES = new Set<string>(['graph', 'map', 'table', 'gauge', 'load-data']);
-
 	// Always prompt for data on every page load — telemetry is never persisted across sessions.
 	let showLoadDataModal: boolean = $state(true);
 
