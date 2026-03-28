@@ -9,11 +9,11 @@
 
 	let { currentLayoutName, onSave, onCancel }: Props = $props();
 
-	let layoutName = $state('');
-	let saveAsNew = $state(false);
+	let layoutName = $state(currentLayoutName || '');
+	let saveAsNew = $state(!currentLayoutName);
 	let errorMessage = $state('');
 
-	// Sync with prop changes
+	// Sync with subsequent prop changes
 	$effect(() => {
 		layoutName = currentLayoutName || '';
 		saveAsNew = !currentLayoutName;
