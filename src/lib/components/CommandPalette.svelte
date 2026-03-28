@@ -130,14 +130,23 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-[1100] flex items-start justify-center pt-[15vh] px-4 sm:px-6"
 		transition:fade={{ duration: 150 }}
-		onclick={onClose}
 	>
-		<div class="fixed inset-0 bg-black/40 backdrop-blur-[2px]"></div>
+		<div
+			class="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
+			role="button"
+			tabindex="0"
+			aria-label="Close command palette"
+			onclick={onClose}
+			onkeydown={(event) => {
+				if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+					event.preventDefault();
+					onClose();
+				}
+			}}
+		></div>
 
 		<div
 			class="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col"
