@@ -157,6 +157,7 @@ export type Command = {
 	label: string;
 	description?: string;
 	shortcut?: string;
-	action: () => void;
+	action?: () => void;
+	children?: Command[];
 	category?: string;
 };

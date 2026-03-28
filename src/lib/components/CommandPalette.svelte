@@ -15,12 +15,29 @@
 	let selectedIndex = $state(0);
 	let inputElement: HTMLInputElement | undefined = $state();
 
+	// Navigation stack for nested menus
+	let navigationStack: { label: string; items: Command[] }[] = $state([]);
+
+	let currentItems = $derived.by(() => {
+		if (navigationStack.length > 0) {
+			return navigationStack[navigationStack.length - 1].items;
+		}
+		return commands;
+	});
+
+	let currentTitle = $derived.by(() => {
+		if (navigationStack.length > 0) {
+			return navigationStack[navigationStack.length - 1].label;
+		}
+		return 'Type a command or search...';
+	});
+
 	// Fuzzy search logic: prefix > word start > substring
 	let filteredCommands = $derived.by(() => {
 		const q = query.toLowerCase().trim();
-		if (!q) return commands;
+		if (!q) return currentItems;
 
-		return commands
+		return currentItems
 			.map((cmd) => {
 				const label = cmd.label.toLowerCase();
 				let score = 0;
@@ -42,13 +59,16 @@
 		if (isOpen) {
 			query = '';
 			selectedIndex = 0;
+			navigationStack = [];
 			// Focus input when opened
 			setTimeout(() => inputElement?.focus(), 0);
 		}
 	});
 
-	// Reset selection when results change
+	// Reset selection when results change or menu changes
 	$effect(() => {
+		// Just watching currentItems and filteredCommands
+		currentItems;
 		if (filteredCommands.length > 0 && selectedIndex >= filteredCommands.length) {
 			selectedIndex = 0;
 		}
@@ -64,17 +84,40 @@
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			if (filteredCommands[selectedIndex]) {
-				executeCommand(filteredCommands[selectedIndex]);
+				handleAction(filteredCommands[selectedIndex]);
 			}
 		} else if (e.key === 'Escape') {
 			e.preventDefault();
+			if (navigationStack.length > 0) {
+				navigationStack.pop();
+				query = '';
+				selectedIndex = 0;
+			} else {
+				onClose();
+			}
+		} else if (e.key === 'Backspace' && query === '' && navigationStack.length > 0) {
+			e.preventDefault();
+			navigationStack.pop();
+			selectedIndex = 0;
+		}
+	}
+
+	function handleAction(cmd: Command) {
+		if (cmd.children && cmd.children.length > 0) {
+			navigationStack.push({ label: cmd.label, items: cmd.children });
+			query = '';
+			selectedIndex = 0;
+		} else if (cmd.action) {
+			cmd.action();
 			onClose();
 		}
 	}
 
-	function executeCommand(cmd: Command) {
-		cmd.action();
-		onClose();
+	function goBack() {
+		navigationStack.pop();
+		query = '';
+		selectedIndex = 0;
+		inputElement?.focus();
 	}
 </script>
 
@@ -82,7 +125,7 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 sm:px-6"
+		class="fixed inset-0 z-[1100] flex items-start justify-center pt-[15vh] px-4 sm:px-6"
 		transition:fade={{ duration: 150 }}
 		onclick={onClose}
 	>
@@ -97,22 +140,43 @@
 				<div
 					class="flex items-center gap-3 bg-neutral-100 dark:bg-neutral-800 px-3 py-2 rounded-lg ring-1 ring-inset ring-neutral-200 dark:ring-neutral-700 focus-within:ring-2 focus-within:ring-primary"
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="w-5 h-5 text-neutral-400"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg
-					>
+					{#if navigationStack.length > 0}
+						<button
+							onclick={goBack}
+							class="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded text-neutral-500"
+							title="Go back"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="w-4 h-4"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg
+							>
+						</button>
+						<div class="h-4 w-px bg-neutral-300 dark:bg-neutral-600"></div>
+					{:else}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="w-5 h-5 text-neutral-400"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg
+						>
+					{/if}
 					<input
 						bind:this={inputElement}
 						bind:value={query}
 						onkeydown={handleKeydown}
 						type="text"
-						placeholder="Type a command or search..."
+						placeholder={currentTitle}
 						class="flex-1 bg-transparent border-none outline-none text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 text-base"
 					/>
 				</div>
@@ -126,7 +190,7 @@
 							selectedIndex
 								? 'bg-primary text-white'
 								: 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'}"
-							onclick={() => executeCommand(cmd)}
+							onclick={() => handleAction(cmd)}
 							onmouseenter={() => (selectedIndex = i)}
 						>
 							<div class="flex flex-col">
@@ -139,21 +203,35 @@
 									</span>
 								{/if}
 							</div>
-							{#if cmd.shortcut}
-								<span
-									class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border {i ===
-									selectedIndex
-										? 'border-white/40 bg-white/20 text-white'
-										: 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-neutral-400'} font-mono"
-								>
-									{cmd.shortcut}
-								</span>
-							{/if}
+							<div class="flex items-center gap-2">
+								{#if cmd.children && cmd.children.length > 0}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="w-4 h-4 {i === selectedIndex ? 'text-white/60' : 'text-neutral-400'}"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg
+									>
+								{/if}
+								{#if cmd.shortcut}
+									<span
+										class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border {i ===
+										selectedIndex
+											? 'border-white/40 bg-white/20 text-white'
+											: 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-neutral-400'} font-mono"
+									>
+										{cmd.shortcut}
+									</span>
+								{/if}
+							</div>
 						</button>
 					{/each}
 				{:else}
 					<div class="py-12 text-center text-neutral-500">
-						<p>No commands found matching "{query}"</p>
+						<p>No results found for "{query}"</p>
 					</div>
 				{/if}
 			</div>

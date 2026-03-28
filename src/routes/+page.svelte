@@ -399,20 +399,54 @@
 	let commands = $derived.by(() => {
 		const layoutCommands: Command[] = layouts.map((l) => ({
 			id: `load-layout-${l.id}`,
-			label: `Switch to: ${l.name}`,
-			description: `Load the "${l.name}" layout`,
-			category: 'Layouts',
+			label: l.name,
+			description: `Load this layout`,
 			action: () => handleLoadLayout(l.id)
 		}));
 
-		const widgetCommands: Command[] = [
-			{ id: 'add-graph', label: 'Add Widget: Graph', action: () => handleAddPane('graph') },
-			{ id: 'add-map', label: 'Add Widget: Map', action: () => handleAddPane('map') },
-			{ id: 'add-table', label: 'Add Widget: Table', action: () => handleAddPane('table') },
-			{ id: 'add-gauge', label: 'Add Widget: Gauge', action: () => handleAddPane('gauge') }
+		const themeCommands: Command[] = [
+			{
+				id: 'theme-light',
+				label: 'Light',
+				action: () => document.documentElement.classList.remove('dark')
+			},
+			{
+				id: 'theme-dark',
+				label: 'Dark',
+				action: () => document.documentElement.classList.add('dark')
+			}
 		];
 
-		return [...staticCommands, ...layoutCommands, ...widgetCommands];
+		const widgetCommands: Command[] = [
+			{ id: 'add-graph', label: 'Graph', action: () => handleAddPane('graph') },
+			{ id: 'add-map', label: 'Map', action: () => handleAddPane('map') },
+			{ id: 'add-table', label: 'Table', action: () => handleAddPane('table') },
+			{ id: 'add-gauge', label: 'Gauge', action: () => handleAddPane('gauge') }
+		];
+
+		const rootCommands: Command[] = [
+			...staticCommands,
+			{
+				id: 'switch-layout-menu',
+				label: 'Switch Layout...',
+				description: 'Select a saved layout to load',
+				children: layoutCommands
+			},
+			{
+				id: 'add-widget-menu',
+				label: 'Add Widget...',
+				description: 'Choose a widget type to add to the dashboard',
+				children: widgetCommands
+			},
+			{
+				id: 'change-theme-menu',
+				label: 'Change Theme...',
+				description: 'Switch between light and dark mode',
+				children: themeCommands
+			}
+		];
+
+		return rootCommands;
 	});
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
