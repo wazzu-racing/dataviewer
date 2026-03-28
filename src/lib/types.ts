@@ -152,12 +152,22 @@ export type LayoutStoreData = {
 // ---------------------------------------------------------------------------
 
 /** A command that can be executed from the command palette */
-export type Command = {
+type BaseCommand = {
 	id: string;
 	label: string;
 	description?: string;
 	shortcut?: string;
-	action?: () => void;
-	children?: Command[];
 	category?: string;
 };
+
+type ExecutableCommand = BaseCommand & {
+	action: () => void;
+	children?: never;
+};
+
+type CommandGroup = BaseCommand & {
+	action?: never;
+	children: Command[];
+};
+
+export type Command = ExecutableCommand | CommandGroup;
