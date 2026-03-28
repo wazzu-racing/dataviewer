@@ -74,29 +74,6 @@
 		}
 	});
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'ArrowDown') {
-			e.preventDefault();
-			if (filteredCommands.length > 0) {
-				selectedIndex = (selectedIndex + 1) % filteredCommands.length;
-			}
-		} else if (e.key === 'ArrowUp') {
-			e.preventDefault();
-			if (filteredCommands.length > 0) {
-				selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
-			}
-		} else if (e.key === 'Enter') {
-			e.preventDefault();
-			if (filteredCommands[selectedIndex]) {
-				handleAction(filteredCommands[selectedIndex]);
-			}
-		} else if (e.key === 'Backspace' && query === '' && navigationStack.length > 0) {
-			e.preventDefault();
-			navigationStack.pop();
-			selectedIndex = 0;
-		}
-	}
-
 	function handleAction(cmd: Command) {
 		if (cmd.children && cmd.children.length > 0) {
 			navigationStack.push({ label: cmd.label, items: cmd.children });
@@ -115,22 +92,43 @@
 		inputElement?.focus();
 	}
 
-	function handleEscape(e: KeyboardEvent) {
-		if (e.key === 'Escape' && isOpen) {
+	function handleKeydown(e: KeyboardEvent) {
+		if (!isOpen) return;
+
+		if (e.key === 'Escape') {
 			e.preventDefault();
 			e.stopPropagation();
 			if (navigationStack.length > 0) {
-				navigationStack.pop();
-				query = '';
-				selectedIndex = 0;
+				goBack();
 			} else {
 				onClose();
 			}
+			return;
+		}
+
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			if (filteredCommands.length > 0) {
+				selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+			}
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			if (filteredCommands.length > 0) {
+				selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
+			}
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+			if (filteredCommands[selectedIndex]) {
+				handleAction(filteredCommands[selectedIndex]);
+			}
+		} else if (e.key === 'Backspace' && query === '' && navigationStack.length > 0) {
+			e.preventDefault();
+			goBack();
 		}
 	}
 </script>
 
-<svelte:window onkeydown={handleEscape} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -185,7 +183,6 @@
 					<input
 						bind:this={inputElement}
 						bind:value={query}
-						onkeydown={handleKeydown}
 						type="text"
 						placeholder={currentTitle}
 						class="flex-1 bg-transparent border-none outline-none text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 text-base"
