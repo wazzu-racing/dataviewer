@@ -23,7 +23,7 @@
 	let { layout, onDrop, onRemove, onPopOut, onConfigChange, onMove }: Props = $props();
 
 	// Drag events for tile move
-	const canMove = typeof onMove === 'function';
+	const canMove = $derived(typeof onMove === 'function');
 
 	function handleDragStart(event: DragEvent) {
 		if (!canMove) return;
@@ -86,30 +86,56 @@
 		class="flex h-full w-full flex-col overflow-hidden border border-border dark:border-neutral-800 rounded-lg shadow-card bg-card dark:bg-neutral-900"
 	>
 		<!-- Title bar -->
-		<div
-			class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
-			draggable={canMove}
-			ondragstart={handleDragStart}
-			ondragend={handleDragEnd}
-		>
-			<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
-				{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
-			</span>
-			<button
-				onclick={() => onPopOut(layout.id)}
-				title="Pop out into floating window"
-				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
+		{#if canMove}
+			<div
+				class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
+				role="button"
+				tabindex="0"
+				draggable={true}
+				ondragstart={handleDragStart}
+				ondragend={handleDragEnd}
 			>
-				⬡
-			</button>
-			<button
-				onclick={() => onRemove(layout.id)}
-				title="Close pane"
-				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
+				<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
+					{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
+				</span>
+				<button
+					onclick={() => onPopOut(layout.id)}
+					title="Pop out into floating window"
+					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
+				>
+					⬡
+				</button>
+				<button
+					onclick={() => onRemove(layout.id)}
+					title="Close pane"
+					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
+				>
+					✕
+				</button>
+			</div>
+		{:else}
+			<div
+				class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
 			>
-				✕
-			</button>
-		</div>
+				<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
+					{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
+				</span>
+				<button
+					onclick={() => onPopOut(layout.id)}
+					title="Pop out into floating window"
+					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
+				>
+					⬡
+				</button>
+				<button
+					onclick={() => onRemove(layout.id)}
+					title="Close pane"
+					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
+				>
+					✕
+				</button>
+			</div>
+		{/if}
 
 		<!-- Widget content wrapped in a drop zone -->
 		<div class="min-h-0 flex-1 overflow-hidden">

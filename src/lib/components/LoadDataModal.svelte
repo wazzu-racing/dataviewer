@@ -72,7 +72,7 @@
 		<!-- Layout Selector Section -->
 		<div class="px-4 py-3 border-t border-gray-200 dark:border-neutral-700">
 			<div class="flex items-center justify-between gap-3">
-				<label class="text-sm font-medium text-gray-700 dark:text-gray-300"> Layout: </label>
+				<span class="text-sm font-medium text-gray-700 dark:text-gray-300"> Layout: </span>
 				<div class="flex gap-2 items-center">
 					<LayoutSelector {layouts} {currentLayoutId} onSelect={onLayoutSelect} compact={true} />
 					<button

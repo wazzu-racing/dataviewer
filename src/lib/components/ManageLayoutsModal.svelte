@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SavedLayout } from '$lib/types';
+	import { focus } from '$lib/actions';
 
 	type Props = {
 		layouts: SavedLayout[];
@@ -113,7 +114,7 @@
 												type="text"
 												bind:value={editingName}
 												class="flex-1 px-2 py-1 border border-gray-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-												autofocus
+												use:focus
 												onkeydown={(e) => {
 													if (e.key === 'Enter') saveRename();
 													if (e.key === 'Escape') cancelRename();
