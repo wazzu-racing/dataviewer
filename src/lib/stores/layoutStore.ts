@@ -88,7 +88,9 @@ export function migrateExistingLayout(isChild: boolean): void {
 			localStorage.removeItem(oldLayoutKey);
 			localStorage.removeItem(oldFloatingKey);
 
-			console.log('Migrated existing layout to "Default" saved layout');
+			if (import.meta.env.DEV) {
+				console.log('Migrated existing layout to "Default" saved layout');
+			}
 		}
 	} catch (err) {
 		console.error('Failed to migrate existing layout:', err);
