@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { Command } from '$lib/types';
 	import { fade, fly } from 'svelte/transition';
 
