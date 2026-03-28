@@ -143,15 +143,19 @@
 			onkeydown={(event) => {
 				if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
 					event.preventDefault();
+					event.stopPropagation();
 					onClose();
 				}
 			}}
 		></div>
 
 		<div
+			role="dialog"
+			aria-modal="true"
+			aria-label="Command palette"
+			tabindex="-1"
 			class="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col"
 			transition:fly={{ y: -20, duration: 200 }}
-			onclick={(e) => e.stopPropagation()}
 		>
 			<div class="p-4 border-b border-neutral-100 dark:border-neutral-800">
 				<div

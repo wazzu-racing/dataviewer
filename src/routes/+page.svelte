@@ -455,8 +455,9 @@
 			e.preventDefault();
 			showCommandPalette = !showCommandPalette;
 		}
-		// Ctrl+S for Save
-		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+		// Ctrl+S for Save — skip when command palette is open so typing "s" in the palette
+		// does not accidentally trigger a save or suppress the browser's default behavior.
+		if (!showCommandPalette && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
 			e.preventDefault();
 			handleSaveLayoutClick();
 		}
