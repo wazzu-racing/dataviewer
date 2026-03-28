@@ -77,23 +77,18 @@
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
-			selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+			if (filteredCommands.length > 0) {
+				selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+			}
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
-			selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
+			if (filteredCommands.length > 0) {
+				selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
+			}
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			if (filteredCommands[selectedIndex]) {
 				handleAction(filteredCommands[selectedIndex]);
-			}
-		} else if (e.key === 'Escape') {
-			e.preventDefault();
-			if (navigationStack.length > 0) {
-				navigationStack.pop();
-				query = '';
-				selectedIndex = 0;
-			} else {
-				onClose();
 			}
 		} else if (e.key === 'Backspace' && query === '' && navigationStack.length > 0) {
 			e.preventDefault();
@@ -119,7 +114,23 @@
 		selectedIndex = 0;
 		inputElement?.focus();
 	}
+
+	function handleEscape(e: KeyboardEvent) {
+		if (e.key === 'Escape' && isOpen) {
+			e.preventDefault();
+			e.stopPropagation();
+			if (navigationStack.length > 0) {
+				navigationStack.pop();
+				query = '';
+				selectedIndex = 0;
+			} else {
+				onClose();
+			}
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleEscape} />
 
 {#if isOpen}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
