@@ -125,3 +125,24 @@ export type FloatingPaneState = {
 	zIndex: number;
 	config?: Record<string, unknown>;
 };
+
+// ---------------------------------------------------------------------------
+// Saved Layout Management
+// ---------------------------------------------------------------------------
+
+/** A saved layout configuration that can be loaded by the user */
+export type SavedLayout = {
+	id: string;
+	name: string;
+	layout: LayoutNode;
+	floatingPanes: FloatingPaneState[];
+	createdAt: number;
+	lastUsed: number;
+};
+
+/** Data structure for the layout store in localStorage */
+export type LayoutStoreData = {
+	layouts: SavedLayout[];
+	activeLayoutId: string | null;
+	autoSaveEnabled: boolean;
+};

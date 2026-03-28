@@ -1,13 +1,19 @@
 <script lang="ts">
+	import type { SavedLayout } from '$lib/types';
 	import ReadData from '$lib/components/ReadData.svelte';
 	import GithubFilePicker from '$lib/components/GithubFilePicker.svelte';
+	import LayoutSelector from '$lib/components/LayoutSelector.svelte';
 	import { data as globalData } from '$lib/data.svelte';
 
 	type Props = {
 		onDismiss: () => void;
+		layouts: SavedLayout[];
+		currentLayoutId: string | null;
+		onLayoutSelect: (layoutId: string) => void;
+		onManageLayouts: () => void;
 	};
 
-	let { onDismiss }: Props = $props();
+	let { onDismiss, layouts, currentLayoutId, onLayoutSelect, onManageLayouts }: Props = $props();
 
 	let readData: ReadData;
 
@@ -35,7 +41,7 @@
 
 <!-- Backdrop -->
 <div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+	class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Load Data"
@@ -61,6 +67,22 @@
 					<GithubFilePicker onFileSelected={handleGithubFile} {loadingBin} />
 				</div>
 			{/if}
+		</div>
+
+		<!-- Layout Selector Section -->
+		<div class="px-4 py-3 border-t border-gray-200 dark:border-neutral-700">
+			<div class="flex items-center justify-between gap-3">
+				<label class="text-sm font-medium text-gray-700 dark:text-gray-300"> Layout: </label>
+				<div class="flex gap-2 items-center">
+					<LayoutSelector {layouts} {currentLayoutId} onSelect={onLayoutSelect} compact={true} />
+					<button
+						onclick={onManageLayouts}
+						class="px-3 py-1.5 text-sm border border-gray-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 font-medium"
+					>
+						Manage
+					</button>
+				</div>
+			</div>
 		</div>
 
 		<!-- Items loaded + Done button, only after telemetry is parsed -->

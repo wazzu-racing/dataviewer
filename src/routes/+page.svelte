@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import type { DataLine } from '$lib/types';
-	import type { LayoutNode, FloatingPaneState, PaneWidgetType, DropPosition } from '$lib/types';
+	import type {
+		LayoutNode,
+		FloatingPaneState,
+		PaneWidgetType,
+		DropPosition,
+		SavedLayout
+	} from '$lib/types';
 	import {
 		ensureIds,
 		insertPane,
@@ -9,8 +15,21 @@
 		findNode,
 		updateConfig,
 		movePane,
-		swapPanes
+		swapPanes,
+		generateUUID
 	} from '$lib/layoutUtils';
+	import {
+		migrateExistingLayout,
+		loadActiveLayout,
+		saveLayout as saveLayoutToStore,
+		updateLayout as updateLayoutInStore,
+		getAllLayouts,
+		getLayout,
+		setActiveLayout,
+		deleteLayout as deleteLayoutFromStore,
+		renameLayout as renameLayoutInStore,
+		duplicateLayout as duplicateLayoutInStore
+	} from '$lib/stores/layoutStore';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 
@@ -22,17 +41,11 @@
 
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
 	import LoadDataModal from '$lib/components/LoadDataModal.svelte';
+	import SaveLayoutModal from '$lib/components/SaveLayoutModal.svelte';
+	import ManageLayoutsModal from '$lib/components/ManageLayoutsModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
-
-	function generateUUID(): string {
-		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-			const r = (Math.random() * 16) | 0;
-			const v = c === 'x' ? r : (r & 0x3) | 0x8;
-			return v.toString(16);
-		});
-	}
 	import { dataStore } from '$lib/stores/dataStore';
 
 	// ---------------------------------------------------------------------------
@@ -44,50 +57,6 @@
 
 	function workingLayout(): LayoutNode {
 		return defaultLayout();
-	}
-
-	function loadSavedLayout(isChild: boolean): LayoutNode {
-		if (!browser) return defaultLayout();
-		try {
-			let key = isChild ? 'child-layout' : 'layout';
-
-			const raw = localStorage.getItem(key);
-			if (!raw) return defaultLayout();
-			const parsed = JSON.parse(raw) as LayoutNode;
-			return ensureIds(parsed);
-		} catch {
-			return defaultLayout();
-		}
-	}
-
-	const VALID_WIDGET_TYPES = new Set<string>(['graph', 'map', 'table', 'gauge', 'load-data']);
-
-	function isValidFloatingPane(p: unknown): p is FloatingPaneState {
-		if (typeof p !== 'object' || p === null) return false;
-		const o = p as Record<string, unknown>;
-		return (
-			typeof o.id === 'string' &&
-			typeof o.type === 'string' &&
-			VALID_WIDGET_TYPES.has(o.type) &&
-			typeof o.x === 'number' &&
-			typeof o.y === 'number' &&
-			typeof o.width === 'number' &&
-			typeof o.height === 'number' &&
-			typeof o.zIndex === 'number'
-		);
-	}
-
-	function loadSavedFloatingPanes(): FloatingPaneState[] {
-		if (!browser) return [];
-		try {
-			const raw = localStorage.getItem('floating-panes');
-			if (!raw) return [];
-			const parsed = JSON.parse(raw);
-			if (!Array.isArray(parsed)) return [];
-			return parsed.filter(isValidFloatingPane);
-		} catch {
-			return [];
-		}
 	}
 
 	// Always prompt for data on every page load — telemetry is never persisted across sessions.
@@ -149,27 +118,69 @@
 	}
 
 	// ---------------------------------------------------------------------------
-	// State — seeded from localStorage on mount
+	// Layout management - Initialize and migrate if needed
 	// ---------------------------------------------------------------------------
-	console.log('IsChild is ' + isChild);
-	let layout: LayoutNode = $state(loadSavedLayout(isChild));
-	let floatingPanes: FloatingPaneState[] = $state(loadSavedFloatingPanes());
-	// FloatingPane z-index convention: max 40 (modal = z-50, overlays = z-10)
+
+	// Run migration once on load
+	if (browser) {
+		migrateExistingLayout(isChild);
+	}
+
+	// Load the active layout or default
+	const initialLayoutData = browser
+		? loadActiveLayout(isChild)
+		: { layout: defaultLayout(), floatingPanes: [], layoutId: null };
+
+	let layout: LayoutNode = $state(initialLayoutData.layout);
+	let floatingPanes: FloatingPaneState[] = $state(initialLayoutData.floatingPanes);
+	let activeLayoutId: string | null = $state(initialLayoutData.layoutId);
+	let layouts: SavedLayout[] = $state(browser ? getAllLayouts(isChild) : []);
+
+	// FloatingPane z-index convention: max 40 (modal = z-[1000], time slider = z-20, overlays = z-10)
 	let topZ = $state(30);
 
+	// Modal states
+	let showSaveLayoutModal: boolean = $state(false);
+	let showManageLayoutsModal: boolean = $state(false);
+	let currentLayoutName: string | undefined = $state(undefined);
+
 	// ---------------------------------------------------------------------------
-	// Persist layout and floating pane positions on change
+	// Persist layout changes - Auto-save to active layout
 	// ---------------------------------------------------------------------------
-	$effect(() => {
-		if (browser) localStorage.setItem(isChild ? 'child-layout' : 'layout', JSON.stringify(layout));
-	});
+	let saveDebounceTimer: number | null = null;
+	let isLoadingLayout = false; // Flag to prevent auto-save during layout loading
 
 	$effect(() => {
-		if (browser)
-			localStorage.setItem(
-				isChild ? 'child-floating-panes' : 'floating-panes',
-				JSON.stringify(floatingPanes)
-			);
+		// Watch layout and floatingPanes changes
+		layout;
+		floatingPanes;
+
+		if (!browser || !activeLayoutId || isLoadingLayout) {
+			return;
+		}
+
+		// Capture values to avoid stale closure issues
+		const layoutIdToSave = activeLayoutId;
+		const layoutToSave = layout;
+		const floatingPanesToSave = floatingPanes;
+
+		// Debounce saves to avoid excessive writes
+		if (saveDebounceTimer !== null) {
+			clearTimeout(saveDebounceTimer);
+		}
+
+		saveDebounceTimer = window.setTimeout(() => {
+			updateLayoutInStore(layoutIdToSave, layoutToSave, floatingPanesToSave, isChild);
+			saveDebounceTimer = null;
+		}, 500);
+
+		// Cleanup function to prevent stale saves
+		return () => {
+			if (saveDebounceTimer !== null) {
+				clearTimeout(saveDebounceTimer);
+				saveDebounceTimer = null;
+			}
+		};
 	});
 
 	// ---------------------------------------------------------------------------
@@ -269,10 +280,97 @@
 		}
 		layout = updated ? ensureIds(updated) : workingLayout();
 	}
+
+	// ---------------------------------------------------------------------------
+	// Layout management handlers
+	// ---------------------------------------------------------------------------
+
+	function handleSaveLayoutClick() {
+		const activeLayout = activeLayoutId ? getLayout(activeLayoutId, isChild) : null;
+		currentLayoutName = activeLayout?.name;
+		showSaveLayoutModal = true;
+	}
+
+	function handleSaveLayout(name: string, isNew: boolean) {
+		if (isNew || !activeLayoutId) {
+			// Save as new layout
+			const newId = saveLayoutToStore(name, layout, floatingPanes, isChild);
+			activeLayoutId = newId;
+			setActiveLayout(newId, isChild);
+		} else {
+			// Update existing layout (also rename if name changed)
+			const existingLayout = getLayout(activeLayoutId, isChild);
+			if (existingLayout && existingLayout.name !== name) {
+				renameLayoutInStore(activeLayoutId, name, isChild);
+			}
+			updateLayoutInStore(activeLayoutId, layout, floatingPanes, isChild);
+		}
+
+		// Refresh layouts list
+		layouts = getAllLayouts(isChild);
+		showSaveLayoutModal = false;
+	}
+
+	function handleLoadLayout(layoutId: string) {
+		const layoutData = getLayout(layoutId, isChild);
+
+		if (layoutData) {
+			// Set flag to prevent auto-save during loading
+			isLoadingLayout = true;
+
+			layout = ensureIds(layoutData.layout);
+			floatingPanes = layoutData.floatingPanes;
+			activeLayoutId = layoutId;
+			setActiveLayout(layoutId, isChild);
+			layouts = getAllLayouts(isChild);
+
+			// Clear flag after a short delay to allow effects to settle
+			setTimeout(() => {
+				isLoadingLayout = false;
+			}, 100);
+		}
+	}
+
+	function handleDeleteLayout(layoutId: string) {
+		deleteLayoutFromStore(layoutId, isChild);
+
+		// If we deleted the active layout, load the new active one
+		if (activeLayoutId === layoutId) {
+			const layoutData = loadActiveLayout(isChild);
+			layout = layoutData.layout;
+			floatingPanes = layoutData.floatingPanes;
+			activeLayoutId = layoutData.layoutId;
+		}
+
+		layouts = getAllLayouts(isChild);
+	}
+
+	function handleRenameLayout(layoutId: string, newName: string) {
+		renameLayoutInStore(layoutId, newName, isChild);
+		layouts = getAllLayouts(isChild);
+	}
+
+	function handleDuplicateLayout(layoutId: string) {
+		const newId = duplicateLayoutInStore(layoutId, isChild);
+		if (newId) {
+			layouts = getAllLayouts(isChild);
+		}
+	}
+
+	function handleManageLayoutsClick() {
+		showManageLayoutsModal = true;
+	}
 </script>
 
 <div class="flex flex-col w-full flex-1 min-h-0 overflow-hidden bg-stone-100">
-	<TopBar openChildWindow={() => createChildWindow()} />
+	<TopBar
+		openChildWindow={() => createChildWindow()}
+		{layouts}
+		currentLayoutId={activeLayoutId}
+		onLayoutSelect={handleLoadLayout}
+		onSaveLayout={handleSaveLayoutClick}
+		onManageLayouts={handleManageLayoutsClick}
+	/>
 	<div class="flex flex-1 overflow-hidden">
 		<PaneToolbar onAddPane={handleAddPane} />
 		<div class="relative flex-1 overflow-hidden">
@@ -302,6 +400,34 @@
 	<LoadDataModal
 		onDismiss={() => {
 			showLoadDataModal = false;
+		}}
+		{layouts}
+		currentLayoutId={activeLayoutId}
+		onLayoutSelect={handleLoadLayout}
+		onManageLayouts={handleManageLayoutsClick}
+	/>
+{/if}
+
+{#if showSaveLayoutModal}
+	<SaveLayoutModal
+		{currentLayoutName}
+		onSave={handleSaveLayout}
+		onCancel={() => {
+			showSaveLayoutModal = false;
+		}}
+	/>
+{/if}
+
+{#if showManageLayoutsModal}
+	<ManageLayoutsModal
+		{layouts}
+		{activeLayoutId}
+		onLoad={handleLoadLayout}
+		onRename={handleRenameLayout}
+		onDelete={handleDeleteLayout}
+		onDuplicate={handleDuplicateLayout}
+		onClose={() => {
+			showManageLayoutsModal = false;
 		}}
 	/>
 {/if}
