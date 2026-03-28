@@ -10,8 +10,9 @@
 <div
 	class="w-full h-14 px-4 bg-primary dark:bg-neutral-900 dark:border-t dark:border-neutral-800 flex items-center gap-4 text-white dark:text-neutral-100"
 >
-	<label class="text-xs font-semibold">Time</label>
+	<label for="time-slider" class="text-xs font-semibold">Time</label>
 	<input
+		id="time-slider"
 		type="range"
 		min={$timeIndexStore.minIndex}
 		max={$timeIndexStore.maxIndex}

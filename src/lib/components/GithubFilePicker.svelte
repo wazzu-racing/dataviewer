@@ -62,12 +62,16 @@
 <!-- Breadcrumb navigation -->
 {#if breadcrumbs.length}
 	<nav class="text-xs mb-2 flex gap-1 dark:text-neutral-300">
-		<span class="breadcrumb" onclick={() => goToFolder('')}>repo root</span>
+		<button type="button" class="breadcrumb" onclick={() => goToFolder('')}>repo root</button>
 		{#each breadcrumbs as crumb, i}
 			<span>/</span>
-			<span class="breadcrumb" onclick={() => goToFolder(breadcrumbs.slice(0, i + 1).join('/'))}
-				>{crumb}</span
+			<button
+				type="button"
+				class="breadcrumb"
+				onclick={() => goToFolder(breadcrumbs.slice(0, i + 1).join('/'))}
 			>
+				{crumb}
+			</button>
 		{/each}
 	</nav>
 {/if}
@@ -101,21 +105,27 @@
 	<ul class="space-y-1">
 		{#each nodes as node}
 			{#if node.type === 'dir'}
-				<li
-					class="font-semibold cursor-pointer dark:text-neutral-200"
-					onclick={() => goToFolder(node.path)}
-				>
-					📁 {node.name}
+				<li>
+					<button
+						type="button"
+						class="w-full text-left font-semibold cursor-pointer dark:text-neutral-200 hover:underline"
+						onclick={() => goToFolder(node.path)}
+					>
+						📁 {node.name}
+					</button>
 				</li>
 			{:else}
-				<li
-					class="text-blue-600 dark:text-blue-400 cursor-pointer"
-					onclick={async () => {
-						if (!node.download_url) return;
-						await onFileSelected(node.download_url);
-					}}
-				>
-					📝 {node.name}
+				<li>
+					<button
+						type="button"
+						class="w-full text-left text-blue-600 dark:text-blue-400 cursor-pointer hover:underline"
+						onclick={async () => {
+							if (!node.download_url) return;
+							await onFileSelected(node.download_url);
+						}}
+					>
+						📝 {node.name}
+					</button>
 				</li>
 			{/if}
 		{/each}
@@ -128,6 +138,13 @@
 		margin-right: 8px;
 		color: #888;
 		cursor: pointer;
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+	}
+	.breadcrumb:hover {
+		text-decoration: underline;
 	}
 	@media (prefers-color-scheme: dark) {
 		.breadcrumb {
