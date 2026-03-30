@@ -96,7 +96,8 @@ export async function convertBinToWazzu(
 	buffer: ArrayBuffer,
 	name: string,
 	driver: string = '',
-	location: string = ''
+	location: string = '',
+	datetime: string = new Date().toISOString()
 ): Promise<Blob> {
 	const dataview = new DataView(buffer);
 	const numFields = 48; // from types.ts
@@ -117,7 +118,7 @@ export async function convertBinToWazzu(
 		name,
 		driver,
 		location,
-		datetime: new Date().toISOString(),
+		datetime,
 		files: {
 			telemetry: 'data.csv'
 		}

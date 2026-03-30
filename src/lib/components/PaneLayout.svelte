@@ -8,6 +8,7 @@
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
 	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
 	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
+	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
 
 	import { dragState } from '$lib/dragState.svelte';
 
@@ -57,7 +58,8 @@
 		map: 'Map',
 		table: 'Table',
 		gauge: 'Gauge',
-		'load-data': 'Load Data'
+		'load-data': 'Load Data',
+		metadata: 'Metadata'
 	};
 </script>
 
@@ -160,6 +162,10 @@
 					/>
 				{:else if layout.type === 'load-data'}
 					<LoadDataWidget onDismiss={() => onRemove(layout.id)} />
+				{:else if layout.type === 'metadata'}
+					<MetadataWidget
+						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
+					/>
 				{:else}
 					<div class="flex h-full items-center justify-center text-sm text-stone-400">
 						Unknown widget type: {layout.type}

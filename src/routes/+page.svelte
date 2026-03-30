@@ -45,24 +45,11 @@
 	import ManageLayoutsModal from '$lib/components/ManageLayoutsModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
-	import SessionMetadataModal from '$lib/components/SessionMetadataModal.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
 	import { dataStore } from '$lib/stores/dataStore';
-	import type { Command, SessionMetadata } from '$lib/types';
+	import type { Command } from '$lib/types';
 	import { saveWazzuFile, convertBinToWazzu } from '$lib/fileFormat';
-
-	// Metadata modal state
-	let showMetadataModal = $state(false);
-	let metadataInitialValues = $state<SessionMetadata>({
-		version: '1.0',
-		name: 'New Session',
-		driver: '',
-		location: '',
-		datetime: '',
-		files: { telemetry: 'data.csv' }
-	});
-	let metadataCallback: ((m: SessionMetadata) => void) | null = null;
 
 	async function handleExportWazzu() {
 		if (globalData.lines.length === 0) {
@@ -70,26 +57,14 @@
 			return;
 		}
 
-		metadataInitialValues = {
-			version: '1.0',
-			name: 'New Session',
-			driver: '',
-			location: '',
-			datetime: new Date().toISOString(),
-			files: { telemetry: 'data.csv' }
-		};
-
-		metadataCallback = async (metadata) => {
-			const blob = await saveWazzuFile(globalData.lines, metadata);
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
-			a.click();
-			URL.revokeObjectURL(url);
-		};
-
-		showMetadataModal = true;
+		const metadata = $state.snapshot(globalData.metadata);
+		const blob = await saveWazzuFile(globalData.lines, metadata);
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
+		a.click();
+		URL.revokeObjectURL(url);
 	}
 
 	async function handleConvertBin() {
@@ -100,33 +75,27 @@
 			const file = e.target.files[0];
 			if (!file) return;
 
-			metadataInitialValues = {
-				version: '1.0',
-				name: file.name.replace('.bin', ''),
-				driver: '',
-				location: '',
-				datetime: new Date().toISOString(),
-				files: { telemetry: 'data.csv' }
-			};
+			const buffer = await file.arrayBuffer();
+			const currentMetadata = $state.snapshot(globalData.metadata);
+			const newName = file.name.replace('.bin', '');
 
-			metadataCallback = async (metadata) => {
-				const buffer = await file.arrayBuffer();
-				const blob = await convertBinToWazzu(
-					buffer,
-					metadata.name,
-					metadata.driver,
-					metadata.location
-				);
+			// Update global metadata with the new name from the file
+			globalData.metadata.name = newName;
 
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
-				a.click();
-				URL.revokeObjectURL(url);
-			};
+			const blob = await convertBinToWazzu(
+				buffer,
+				newName,
+				currentMetadata.driver,
+				currentMetadata.location,
+				new Date().toISOString()
+			);
 
-			showMetadataModal = true;
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `${file.name.replace('.bin', '')}.wazzuracing`;
+			a.click();
+			URL.revokeObjectURL(url);
 		};
 		input.click();
 	}
@@ -514,7 +483,8 @@
 			{ id: 'add-graph', label: 'Graph', action: () => handleAddPane('graph') },
 			{ id: 'add-map', label: 'Map', action: () => handleAddPane('map') },
 			{ id: 'add-table', label: 'Table', action: () => handleAddPane('table') },
-			{ id: 'add-gauge', label: 'Gauge', action: () => handleAddPane('gauge') }
+			{ id: 'add-gauge', label: 'Gauge', action: () => handleAddPane('gauge') },
+			{ id: 'add-metadata', label: 'Metadata', action: () => handleAddPane('metadata') }
 		];
 
 		const rootCommands: Command[] = [
@@ -629,14 +599,6 @@
 		}}
 	/>
 {/if}
-
-<SessionMetadataModal
-	bind:show={showMetadataModal}
-	initialMetadata={metadataInitialValues}
-	onConfirm={(metadata) => {
-		if (metadataCallback) metadataCallback(metadata);
-	}}
-/>
 
 <CommandPalette
 	bind:isOpen={showCommandPalette}

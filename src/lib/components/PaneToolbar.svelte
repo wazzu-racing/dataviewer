@@ -39,6 +39,12 @@
 			label: 'Load Data',
 			icon: '📂',
 			colorClass: 'hover:bg-stone-100 hover:text-stone-800'
+		},
+		{
+			type: 'metadata',
+			label: 'Metadata',
+			icon: '📝',
+			colorClass: 'hover:bg-yellow-100 hover:text-yellow-800'
 		}
 	];
 

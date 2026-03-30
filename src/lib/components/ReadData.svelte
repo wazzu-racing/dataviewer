@@ -18,8 +18,9 @@
 
 		if (f.name.endsWith('.wazzuracing')) {
 			try {
-				const { telemetry } = await loadWazzuFile(buffer);
+				const { telemetry, metadata } = await loadWazzuFile(buffer);
 				globalData.lines = telemetry;
+				globalData.metadata = metadata;
 				dataStore.update((old) => ({
 					...old,
 					telemetry: globalData.lines

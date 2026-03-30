@@ -95,7 +95,7 @@ export type TableConfig = {
 // ---------------------------------------------------------------------------
 
 /** All widget types that can occupy a pane */
-export type PaneWidgetType = 'graph' | 'map' | 'table' | 'gauge' | 'load-data';
+export type PaneWidgetType = 'graph' | 'map' | 'table' | 'gauge' | 'load-data' | 'metadata';
 
 /**
  * A node in the recursive layout tree.
