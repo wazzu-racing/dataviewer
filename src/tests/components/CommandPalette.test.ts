@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CommandPalette from '$lib/components/CommandPalette.svelte';
-import type { Command } from '$lib/types';
+import type { Command, ExecutableCommand } from '$lib/types';
 
 // Svelte's fade/fly transitions rely on Element.animate() (Web Animations API)
 // which is not available in jsdom.  Return a zero-duration CSS transition so
@@ -14,6 +14,10 @@ vi.mock('svelte/transition', () => ({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function isExecutable(cmd: Command): cmd is ExecutableCommand {
+	return 'action' in cmd && typeof cmd.action === 'function';
+}
 
 function makeCommands(): Command[] {
 	const actionA = vi.fn();
@@ -115,7 +119,12 @@ describe('CommandPalette', () => {
 		// Index 0 is selected by default
 		await fireEvent.keyDown(window, { key: 'Enter' });
 
-		expect((commands[0] as { action: ReturnType<typeof vi.fn> }).action).toHaveBeenCalledOnce();
+		const first = commands[0];
+		if (isExecutable(first)) {
+			expect(first.action).toHaveBeenCalledOnce();
+		} else {
+			throw new Error('Expected first command to be executable');
+		}
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
@@ -205,7 +214,12 @@ describe('CommandPalette', () => {
 		await fireEvent.keyDown(window, { key: 'ArrowDown' });
 		await fireEvent.keyDown(window, { key: 'Enter' });
 
-		expect((commands[1] as { action: ReturnType<typeof vi.fn> }).action).toHaveBeenCalledOnce();
+		const second = commands[1];
+		if (isExecutable(second)) {
+			expect(second.action).toHaveBeenCalledOnce();
+		} else {
+			throw new Error('Expected second command to be executable');
+		}
 	});
 
 	it('wraps selection from last item back to first with ArrowDown', async () => {
@@ -220,7 +234,12 @@ describe('CommandPalette', () => {
 		await fireEvent.keyDown(window, { key: 'Enter' });
 
 		// Back at index 0 (Open Window)
-		expect((commands[0] as { action: ReturnType<typeof vi.fn> }).action).toHaveBeenCalledOnce();
+		const first = commands[0];
+		if (isExecutable(first)) {
+			expect(first.action).toHaveBeenCalledOnce();
+		} else {
+			throw new Error('Expected first command to be executable');
+		}
 	});
 
 	it('wraps selection from first item to last with ArrowUp', async () => {

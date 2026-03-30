@@ -89,6 +89,9 @@
 		{#if canMove}
 			<div
 				class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
+				role="toolbar"
+				aria-label="Pane header"
+				tabindex="0"
 				draggable={true}
 				ondragstart={handleDragStart}
 				ondragend={handleDragEnd}

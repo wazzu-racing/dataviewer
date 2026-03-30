@@ -114,33 +114,44 @@
 			}
 			return;
 		}
-		const idx = $timeIndexStore.selectedIndex;
-		const line = $dataStore.telemetry[idx];
-		if (
-			!line ||
-			typeof line.lat !== 'number' ||
-			typeof line.lon !== 'number' ||
-			line.lat === 0 ||
-			line.lon === 0
-		) {
+
+		let cancelled = false;
+
+		// Use the same Leaflet instance as the map creation effect
+		loadLeaflet().then((L) => {
+			if (cancelled || !leafletMap) return;
+
+			const idx = $timeIndexStore.selectedIndex;
+			const line = $dataStore.telemetry[idx];
+			if (
+				!line ||
+				typeof line.lat !== 'number' ||
+				typeof line.lon !== 'number' ||
+				line.lat === 0 ||
+				line.lon === 0
+			) {
+				if (timeMarker) {
+					leafletMap.removeLayer(timeMarker);
+					timeMarker = null;
+				}
+				return;
+			}
 			if (timeMarker) {
 				leafletMap.removeLayer(timeMarker);
 				timeMarker = null;
 			}
-			return;
-		}
-		if (timeMarker) {
-			leafletMap.removeLayer(timeMarker);
-			timeMarker = null;
-		}
-		timeMarker = L.circleMarker([line.lat, line.lon], {
-			radius: 9,
-			color: BRAND_ACCENT,
-			fillColor: BRAND_ACCENT,
-			fillOpacity: 0.85,
-			weight: 4
-		}).addTo(leafletMap);
-		// (Optional: could panTo marker)
+			timeMarker = L.circleMarker([line.lat, line.lon], {
+				radius: 9,
+				color: BRAND_ACCENT,
+				fillColor: BRAND_ACCENT,
+				fillOpacity: 0.85,
+				weight: 4
+			}).addTo(leafletMap);
+		});
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	// Invalidate map size when container resizes
