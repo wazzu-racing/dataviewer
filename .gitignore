@@ -26,3 +26,5 @@ vite.config.ts.timestamp-*
 docs/
 
 .harper-dictionary.txt
+test/
+*.wazzuracing

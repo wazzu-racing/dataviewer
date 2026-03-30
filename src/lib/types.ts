@@ -148,11 +148,30 @@ export type LayoutStoreData = {
 };
 
 // ---------------------------------------------------------------------------
+// File format types
+// ---------------------------------------------------------------------------
+
+/** Metadata stored in the .wazzuracing ZIP format */
+export type SessionMetadata = {
+	version: string;
+	name: string;
+	driver?: string;
+	location?: string;
+	datetime?: string;
+	conditions?: string;
+	files: {
+		telemetry: string; // reference to the CSV file within the ZIP
+	};
+};
+
+// ---------------------------------------------------------------------------
 // Command Palette Types
 // ---------------------------------------------------------------------------
 
 /** A command that can be executed from the command palette */
-type BaseCommand = {
+export type Command = ExecutableCommand | CommandGroup;
+
+export type BaseCommand = {
 	id: string;
 	label: string;
 	description?: string;
@@ -160,14 +179,12 @@ type BaseCommand = {
 	category?: string;
 };
 
-type ExecutableCommand = BaseCommand & {
+export type ExecutableCommand = BaseCommand & {
 	action: () => void;
 	children?: never;
 };
 
-type CommandGroup = BaseCommand & {
+export type CommandGroup = BaseCommand & {
 	action?: never;
 	children: Command[];
 };
-
-export type Command = ExecutableCommand | CommandGroup;

@@ -45,10 +45,91 @@
 	import ManageLayoutsModal from '$lib/components/ManageLayoutsModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
+	import SessionMetadataModal from '$lib/components/SessionMetadataModal.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
 	import { dataStore } from '$lib/stores/dataStore';
-	import type { Command } from '$lib/types';
+	import type { Command, SessionMetadata } from '$lib/types';
+	import { saveWazzuFile, convertBinToWazzu } from '$lib/fileFormat';
+
+	// Metadata modal state
+	let showMetadataModal = $state(false);
+	let metadataInitialValues = $state<SessionMetadata>({
+		version: '1.0',
+		name: 'New Session',
+		driver: '',
+		location: '',
+		datetime: '',
+		files: { telemetry: 'data.csv' }
+	});
+	let metadataCallback: ((m: SessionMetadata) => void) | null = null;
+
+	async function handleExportWazzu() {
+		if (globalData.lines.length === 0) {
+			alert('No data to export.');
+			return;
+		}
+
+		metadataInitialValues = {
+			version: '1.0',
+			name: 'New Session',
+			driver: '',
+			location: '',
+			datetime: new Date().toISOString(),
+			files: { telemetry: 'data.csv' }
+		};
+
+		metadataCallback = async (metadata) => {
+			const blob = await saveWazzuFile(globalData.lines, metadata);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
+			a.click();
+			URL.revokeObjectURL(url);
+		};
+
+		showMetadataModal = true;
+	}
+
+	async function handleConvertBin() {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = '.bin';
+		input.onchange = async (e: any) => {
+			const file = e.target.files[0];
+			if (!file) return;
+
+			metadataInitialValues = {
+				version: '1.0',
+				name: file.name.replace('.bin', ''),
+				driver: '',
+				location: '',
+				datetime: new Date().toISOString(),
+				files: { telemetry: 'data.csv' }
+			};
+
+			metadataCallback = async (metadata) => {
+				const buffer = await file.arrayBuffer();
+				const blob = await convertBinToWazzu(
+					buffer,
+					metadata.name,
+					metadata.driver,
+					metadata.location
+				);
+
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
+				a.click();
+				URL.revokeObjectURL(url);
+			};
+
+			showMetadataModal = true;
+		};
+		input.click();
+	}
 
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
@@ -393,6 +474,18 @@
 			label: 'Load Data',
 			description: 'Open the data import modal',
 			action: () => (showLoadDataModal = true)
+		},
+		{
+			id: 'export-wazzu',
+			label: 'Export as .wazzuracing',
+			description: 'Save the current session in the new format',
+			action: handleExportWazzu
+		},
+		{
+			id: 'convert-bin',
+			label: 'Convert .bin to .wazzuracing',
+			description: 'Select a .bin file and convert it to the new format',
+			action: handleConvertBin
 		}
 	];
 
@@ -536,6 +629,14 @@
 		}}
 	/>
 {/if}
+
+<SessionMetadataModal
+	bind:show={showMetadataModal}
+	initialMetadata={metadataInitialValues}
+	onConfirm={(metadata) => {
+		if (metadataCallback) metadataCallback(metadata);
+	}}
+/>
 
 <CommandPalette
 	bind:isOpen={showCommandPalette}
