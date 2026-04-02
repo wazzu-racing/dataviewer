@@ -566,8 +566,8 @@
 	});
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
-		// Escape to close fullscreen
-		if (e.key === 'Escape' && fullscreenNode) {
+		// Escape to close fullscreen, but let the command palette handle Escape first when open.
+		if (!showCommandPalette && e.key === 'Escape' && fullscreenNode) {
 			handleCloseFullscreen();
 			return;
 		}
