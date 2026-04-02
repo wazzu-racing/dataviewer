@@ -11,17 +11,20 @@
 	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
 
 	import { dragState } from '$lib/dragState.svelte';
+	import { WIDGET_LABELS } from '$lib/types';
 
 	type Props = {
 		layout: LayoutNode;
 		onDrop: (nodeId: string, widgetType: PaneWidgetType, position: DropPosition) => void;
 		onRemove: (nodeId: string) => void;
 		onPopOut: (nodeId: string) => void;
+		onFullscreen?: (nodeId: string) => void;
 		onConfigChange: (nodeId: string, config: Record<string, unknown>) => void;
 		onMove?: (sourceId: string, nodeId: string, position: DropPosition) => void;
 	};
 
-	let { layout, onDrop, onRemove, onPopOut, onConfigChange, onMove }: Props = $props();
+	let { layout, onDrop, onRemove, onPopOut, onFullscreen, onConfigChange, onMove }: Props =
+		$props();
 
 	// Drag events for tile move
 	const canMove = $derived(typeof onMove === 'function');
@@ -52,15 +55,6 @@
 	function handleDragEnd(_event: DragEvent) {
 		dragState.draggingPaneId = null;
 	}
-
-	const WIDGET_LABELS: Record<PaneWidgetType, string> = {
-		graph: 'Graph',
-		map: 'Map',
-		table: 'Table',
-		gauge: 'Gauge',
-		'load-data': 'Load Data',
-		metadata: 'Metadata'
-	};
 </script>
 
 {#if layout.type === 'horizontal' || layout.type === 'vertical'}
@@ -71,7 +65,15 @@
 		{#each layout.panes ?? [] as child, i (child.id)}
 			<Pane defaultSize={child.defaultSize ?? 50} minSize={child.minSize ?? 5}>
 				<!-- Recurse -->
-				<PaneLayout layout={child} {onDrop} {onRemove} {onPopOut} {onConfigChange} {onMove} />
+				<PaneLayout
+					layout={child}
+					{onDrop}
+					{onRemove}
+					{onPopOut}
+					{onFullscreen}
+					{onConfigChange}
+					{onMove}
+				/>
 			</Pane>
 			{#if i < (layout.panes?.length ?? 0) - 1}
 				<PaneResizer
@@ -88,57 +90,40 @@
 		class="flex h-full w-full flex-col overflow-hidden border border-border dark:border-neutral-800 rounded-lg shadow-card bg-card dark:bg-neutral-900"
 	>
 		<!-- Title bar -->
-		{#if canMove}
-			<div
-				class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
-				role="toolbar"
-				aria-label="Pane header"
-				tabindex="0"
-				draggable={true}
-				ondragstart={handleDragStart}
-				ondragend={handleDragEnd}
+		<div
+			class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
+			role="toolbar"
+			aria-label="Pane header"
+			tabindex="0"
+			draggable={canMove}
+			ondragstart={canMove ? handleDragStart : undefined}
+			ondragend={canMove ? handleDragEnd : undefined}
+		>
+			<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
+				{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
+			</span>
+			<button
+				onclick={() => onPopOut(layout.id)}
+				title="Pop out into floating window"
+				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
 			>
-				<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
-					{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
-				</span>
-				<button
-					onclick={() => onPopOut(layout.id)}
-					title="Pop out into floating window"
-					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
-				>
-					⬡
-				</button>
-				<button
-					onclick={() => onRemove(layout.id)}
-					title="Close pane"
-					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
-				>
-					✕
-				</button>
-			</div>
-		{:else}
-			<div
-				class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
+				⬡
+			</button>
+			<button
+				onclick={() => onFullscreen?.(layout.id)}
+				title="Fullscreen"
+				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
 			>
-				<span class="flex-1 text-xs font-semibold text-primary dark:text-neutral-100">
-					{WIDGET_LABELS[layout.type as PaneWidgetType] ?? layout.type}
-				</span>
-				<button
-					onclick={() => onPopOut(layout.id)}
-					title="Pop out into floating window"
-					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
-				>
-					⬡
-				</button>
-				<button
-					onclick={() => onRemove(layout.id)}
-					title="Close pane"
-					class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
-				>
-					✕
-				</button>
-			</div>
-		{/if}
+				⛶
+			</button>
+			<button
+				onclick={() => onRemove(layout.id)}
+				title="Close pane"
+				class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100"
+			>
+				✕
+			</button>
+		</div>
 
 		<!-- Widget content wrapped in a drop zone -->
 		<div class="min-h-0 flex-1 overflow-hidden">

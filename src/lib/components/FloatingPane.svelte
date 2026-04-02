@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { draggable } from '@neodrag/svelte';
-	import type { FloatingPaneState, PaneWidgetType, GraphConfig } from '$lib/types';
+	import {
+		WIDGET_LABELS,
+		type FloatingPaneState,
+		type PaneWidgetType,
+		type GraphConfig
+	} from '$lib/types';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
 	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
@@ -13,19 +18,11 @@
 		onClose: (id: string) => void;
 		onFocus: (id: string) => void;
 		onDock: (id: string) => void;
+		onFullscreen?: (id: string) => void;
 		onConfigChange: (id: string, config: Record<string, unknown>) => void;
 	};
 
-	let { pane, onClose, onFocus, onDock, onConfigChange }: Props = $props();
-
-	const WIDGET_LABELS: Record<PaneWidgetType, string> = {
-		graph: 'Graph',
-		map: 'Map',
-		table: 'Table',
-		gauge: 'Gauge',
-		'load-data': 'Load Data',
-		metadata: 'Metadata'
-	};
+	let { pane, onClose, onFocus, onDock, onFullscreen, onConfigChange }: Props = $props();
 
 	// Use $derived so width/height stay in sync if pane prop changes
 	const width = $derived(pane.width);
@@ -58,6 +55,13 @@
 			class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
 		>
 			⬢
+		</button>
+		<button
+			onclick={() => onFullscreen?.(pane.id)}
+			title="Fullscreen"
+			class="rounded px-1 py-0.5 text-xs text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary-100"
+		>
+			⛶
 		</button>
 		<button
 			onclick={() => onClose(pane.id)}
