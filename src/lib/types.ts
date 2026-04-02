@@ -140,6 +140,16 @@ export type SavedLayout = {
 	lastUsed: number;
 };
 
+/** Shared labels for widget types */
+export const WIDGET_LABELS: Record<PaneWidgetType, string> = {
+	graph: 'Graph',
+	map: 'Map',
+	table: 'Table',
+	gauge: 'Gauge',
+	'load-data': 'Load Data',
+	metadata: 'Metadata'
+};
+
 /** Data structure for the layout store in localStorage */
 export type LayoutStoreData = {
 	layouts: SavedLayout[];

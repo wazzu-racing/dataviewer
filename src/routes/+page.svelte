@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import type { DataLine } from '$lib/types';
-	import type {
-		LayoutNode,
-		FloatingPaneState,
-		PaneWidgetType,
-		DropPosition,
-		SavedLayout
+	import {
+		WIDGET_LABELS,
+		type LayoutNode,
+		type FloatingPaneState,
+		type PaneWidgetType,
+		type DropPosition,
+		type SavedLayout,
+		type GraphConfig,
+		type TableConfig,
+		type GaugeConfig
 	} from '$lib/types';
 	import {
 		ensureIds,
@@ -45,6 +49,13 @@
 	import ManageLayoutsModal from '$lib/components/ManageLayoutsModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
+
+	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
+	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
+	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
+	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
+	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
+	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
 	import { dataStore } from '$lib/stores/dataStore';
@@ -196,6 +207,10 @@
 	let showManageLayoutsModal: boolean = $state(false);
 	let currentLayoutName: string | undefined = $state(undefined);
 
+	// Fullscreen state
+	let fullscreenNode: { id: string; type: PaneWidgetType; isFloating: boolean } | null =
+		$state(null);
+
 	// ---------------------------------------------------------------------------
 	// Persist layout changes - Auto-save to active layout
 	// ---------------------------------------------------------------------------
@@ -321,6 +336,25 @@
 		floatingPanes = floatingPanes.map((p) => (p.id === id ? { ...p, config } : p));
 	}
 
+	// ---------------------------------------------------------------------------
+	// Fullscreen handlers
+	// ---------------------------------------------------------------------------
+	function handleFullscreen(id: string, isFloating: boolean) {
+		const source = isFloating ? floatingPanes.find((p) => p.id === id) : findNode(layout, id);
+
+		if (source) {
+			fullscreenNode = {
+				id,
+				type: source.type as PaneWidgetType,
+				isFloating
+			};
+		}
+	}
+
+	function handleCloseFullscreen() {
+		fullscreenNode = null;
+	}
+
 	// --- Handle pane moves / swaps ---
 	function handleMove(sourceId: string, targetId: string, position: DropPosition) {
 		if (sourceId === targetId) return;
@@ -411,6 +445,27 @@
 
 	function handleManageLayoutsClick() {
 		showManageLayoutsModal = true;
+	}
+
+	// ---------------------------------------------------------------------------
+	// Fullscreen Logic
+	// ---------------------------------------------------------------------------
+	const fullscreenConfig = $derived.by(() => {
+		if (!fullscreenNode) return undefined;
+		if (fullscreenNode.isFloating) {
+			return floatingPanes.find((p) => p.id === fullscreenNode!.id)?.config;
+		} else {
+			return findNode(layout, fullscreenNode.id)?.config;
+		}
+	});
+
+	function handleFullscreenConfigChange(config: Record<string, unknown>) {
+		if (!fullscreenNode) return;
+		if (fullscreenNode.isFloating) {
+			handleFloatConfigChange(fullscreenNode.id, config);
+		} else {
+			handleLayoutConfigChange(fullscreenNode.id, config);
+		}
 	}
 
 	// ---------------------------------------------------------------------------
@@ -513,6 +568,12 @@
 	});
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
+		// Escape to close fullscreen, but let the command palette handle Escape first when open.
+		if (!showCommandPalette && e.key === 'Escape' && fullscreenNode) {
+			handleCloseFullscreen();
+			return;
+		}
+
 		// Ctrl+Shift+P or Cmd+Shift+P
 		if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
 			e.preventDefault();
@@ -547,8 +608,12 @@
 				onDrop={handleDrop}
 				onRemove={handleRemove}
 				onPopOut={handlePopOut}
+				onFullscreen={(id) => handleFullscreen(id, false)}
 				onConfigChange={handleLayoutConfigChange}
 				onMove={handleMove}
+				fullscreenPaneId={fullscreenNode && !fullscreenNode.isFloating
+					? fullscreenNode.id
+					: undefined}
 			/>
 
 			{#each floatingPanes as pane (pane.id)}
@@ -557,7 +622,9 @@
 					onClose={handleFloatClose}
 					onFocus={handleFloatFocus}
 					onDock={handleDock}
+					onFullscreen={(id) => handleFullscreen(id, true)}
 					onConfigChange={handleFloatConfigChange}
+					hidden={fullscreenNode?.id === pane.id && fullscreenNode.isFloating}
 				/>
 			{/each}
 		</div>
@@ -605,3 +672,51 @@
 	{commands}
 	onClose={() => (showCommandPalette = false)}
 />
+
+{#if fullscreenNode}
+	<div
+		class="fixed inset-0 z-[500] flex flex-col bg-white dark:bg-neutral-950"
+		role="dialog"
+		aria-modal="true"
+		aria-label={`${WIDGET_LABELS[fullscreenNode.type]} fullscreen`}
+	>
+		<div
+			class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 px-4 py-2"
+		>
+			<span class="flex-1 text-sm font-semibold text-primary-900 dark:text-neutral-100">
+				{WIDGET_LABELS[fullscreenNode.type]} (Fullscreen)
+			</span>
+			<button
+				onclick={handleCloseFullscreen}
+				title="Exit Fullscreen"
+				class="rounded px-2 py-1 text-sm text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100 transition-colors"
+			>
+				✕ Exit Fullscreen
+			</button>
+		</div>
+		<div class="flex-1 min-h-0 overflow-hidden">
+			{#if fullscreenNode.type === 'graph'}
+				<GraphWidget
+					config={fullscreenConfig as GraphConfig | undefined}
+					onConfigChange={handleFullscreenConfigChange}
+				/>
+			{:else if fullscreenNode.type === 'map'}
+				<MapWidget />
+			{:else if fullscreenNode.type === 'table'}
+				<TableWidget
+					config={fullscreenConfig as TableConfig | undefined}
+					onConfigChange={handleFullscreenConfigChange}
+				/>
+			{:else if fullscreenNode.type === 'gauge'}
+				<GaugeWidget
+					config={fullscreenConfig as GaugeConfig | undefined}
+					onConfigChange={handleFullscreenConfigChange}
+				/>
+			{:else if fullscreenNode.type === 'load-data'}
+				<LoadDataWidget onDismiss={handleCloseFullscreen} />
+			{:else if fullscreenNode.type === 'metadata'}
+				<MetadataWidget onConfigChange={handleFullscreenConfigChange} />
+			{/if}
+		</div>
+	</div>
+{/if}
