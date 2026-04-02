@@ -21,10 +21,19 @@
 		onFullscreen?: (nodeId: string) => void;
 		onConfigChange: (nodeId: string, config: Record<string, unknown>) => void;
 		onMove?: (sourceId: string, nodeId: string, position: DropPosition) => void;
+		fullscreenPaneId?: string;
 	};
 
-	let { layout, onDrop, onRemove, onPopOut, onFullscreen, onConfigChange, onMove }: Props =
-		$props();
+	let {
+		layout,
+		onDrop,
+		onRemove,
+		onPopOut,
+		onFullscreen,
+		onConfigChange,
+		onMove,
+		fullscreenPaneId
+	}: Props = $props();
 
 	// Drag events for tile move
 	const canMove = $derived(typeof onMove === 'function');
@@ -73,6 +82,7 @@
 					{onFullscreen}
 					{onConfigChange}
 					{onMove}
+					{fullscreenPaneId}
 				/>
 			</Pane>
 			{#if i < (layout.panes?.length ?? 0) - 1}
@@ -126,7 +136,10 @@
 		</div>
 
 		<!-- Widget content wrapped in a drop zone -->
-		<div class="min-h-0 flex-1 overflow-hidden">
+		<div
+			class="min-h-0 flex-1 overflow-hidden"
+			style:visibility={layout.id === fullscreenPaneId ? 'hidden' : undefined}
+		>
 			<DropZone nodeId={layout.id} {onDrop} {onMove}>
 				{#if layout.type === 'graph'}
 					<GraphWidget

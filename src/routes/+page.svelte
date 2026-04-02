@@ -8,7 +8,9 @@
 		type PaneWidgetType,
 		type DropPosition,
 		type SavedLayout,
-		type GraphConfig
+		type GraphConfig,
+		type TableConfig,
+		type GaugeConfig
 	} from '$lib/types';
 	import {
 		ensureIds,
@@ -609,6 +611,9 @@
 				onFullscreen={(id) => handleFullscreen(id, false)}
 				onConfigChange={handleLayoutConfigChange}
 				onMove={handleMove}
+				fullscreenPaneId={fullscreenNode && !fullscreenNode.isFloating
+					? fullscreenNode.id
+					: undefined}
 			/>
 
 			{#each floatingPanes as pane (pane.id)}
@@ -619,6 +624,7 @@
 					onDock={handleDock}
 					onFullscreen={(id) => handleFullscreen(id, true)}
 					onConfigChange={handleFloatConfigChange}
+					hidden={fullscreenNode?.id === pane.id && fullscreenNode.isFloating}
 				/>
 			{/each}
 		</div>
@@ -698,12 +704,12 @@
 				<MapWidget />
 			{:else if fullscreenNode.type === 'table'}
 				<TableWidget
-					config={fullscreenConfig as any}
+					config={fullscreenConfig as TableConfig | undefined}
 					onConfigChange={handleFullscreenConfigChange}
 				/>
 			{:else if fullscreenNode.type === 'gauge'}
 				<GaugeWidget
-					config={fullscreenConfig as any}
+					config={fullscreenConfig as GaugeConfig | undefined}
 					onConfigChange={handleFullscreenConfigChange}
 				/>
 			{:else if fullscreenNode.type === 'load-data'}
