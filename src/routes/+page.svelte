@@ -668,7 +668,12 @@
 />
 
 {#if fullscreenNode}
-	<div class="fixed inset-0 z-[500] flex flex-col bg-white dark:bg-neutral-950">
+	<div
+		class="fixed inset-0 z-[500] flex flex-col bg-white dark:bg-neutral-950"
+		role="dialog"
+		aria-modal="true"
+		aria-label={`${WIDGET_LABELS[fullscreenNode.type]} fullscreen`}
+	>
 		<div
 			class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 px-4 py-2"
 		>
