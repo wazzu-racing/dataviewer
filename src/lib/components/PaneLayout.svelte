@@ -8,6 +8,7 @@
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
 	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
 	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
+	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
 
 	import { dragState } from '$lib/dragState.svelte';
 
@@ -57,7 +58,8 @@
 		map: 'Map',
 		table: 'Table',
 		gauge: 'Gauge',
-		'load-data': 'Load Data'
+		'load-data': 'Load Data',
+		metadata: 'Metadata'
 	};
 </script>
 
@@ -89,6 +91,9 @@
 		{#if canMove}
 			<div
 				class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-background dark:bg-neutral-800 px-3 py-1"
+				role="toolbar"
+				aria-label="Pane header"
+				tabindex="0"
 				draggable={true}
 				ondragstart={handleDragStart}
 				ondragend={handleDragEnd}
@@ -157,6 +162,10 @@
 					/>
 				{:else if layout.type === 'load-data'}
 					<LoadDataWidget onDismiss={() => onRemove(layout.id)} />
+				{:else if layout.type === 'metadata'}
+					<MetadataWidget
+						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
+					/>
 				{:else}
 					<div class="flex h-full items-center justify-center text-sm text-stone-400">
 						Unknown widget type: {layout.type}

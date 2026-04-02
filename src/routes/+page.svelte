@@ -49,6 +49,56 @@
 	import { data as globalData } from '$lib/data.svelte';
 	import { dataStore } from '$lib/stores/dataStore';
 	import type { Command } from '$lib/types';
+	import { saveWazzuFile, convertBinToWazzu } from '$lib/fileFormat';
+
+	async function handleExportWazzu() {
+		if (globalData.lines.length === 0) {
+			alert('No data to export.');
+			return;
+		}
+
+		const metadata = $state.snapshot(globalData.metadata);
+		const blob = await saveWazzuFile(globalData.lines, metadata);
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function handleConvertBin() {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = '.bin';
+		input.onchange = async (e: any) => {
+			const file = e.target.files[0];
+			if (!file) return;
+
+			const buffer = await file.arrayBuffer();
+			const currentMetadata = $state.snapshot(globalData.metadata);
+			const newName = file.name.replace('.bin', '');
+
+			// Update global metadata with the new name from the file
+			globalData.metadata.name = newName;
+
+			const blob = await convertBinToWazzu(
+				buffer,
+				newName,
+				currentMetadata.driver,
+				currentMetadata.location,
+				new Date().toISOString()
+			);
+
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `${file.name.replace('.bin', '')}.wazzuracing`;
+			a.click();
+			URL.revokeObjectURL(url);
+		};
+		input.click();
+	}
 
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
@@ -393,6 +443,18 @@
 			label: 'Load Data',
 			description: 'Open the data import modal',
 			action: () => (showLoadDataModal = true)
+		},
+		{
+			id: 'export-wazzu',
+			label: 'Export as .wazzuracing',
+			description: 'Save the current session in the new format',
+			action: handleExportWazzu
+		},
+		{
+			id: 'convert-bin',
+			label: 'Convert .bin to .wazzuracing',
+			description: 'Select a .bin file and convert it to the new format',
+			action: handleConvertBin
 		}
 	];
 
@@ -421,7 +483,8 @@
 			{ id: 'add-graph', label: 'Graph', action: () => handleAddPane('graph') },
 			{ id: 'add-map', label: 'Map', action: () => handleAddPane('map') },
 			{ id: 'add-table', label: 'Table', action: () => handleAddPane('table') },
-			{ id: 'add-gauge', label: 'Gauge', action: () => handleAddPane('gauge') }
+			{ id: 'add-gauge', label: 'Gauge', action: () => handleAddPane('gauge') },
+			{ id: 'add-metadata', label: 'Metadata', action: () => handleAddPane('metadata') }
 		];
 
 		const rootCommands: Command[] = [

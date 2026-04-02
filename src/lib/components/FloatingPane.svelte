@@ -6,6 +6,7 @@
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
 	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
 	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
+	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
 
 	type Props = {
 		pane: FloatingPaneState;
@@ -22,7 +23,8 @@
 		map: 'Map',
 		table: 'Table',
 		gauge: 'Gauge',
-		'load-data': 'Load Data'
+		'load-data': 'Load Data',
+		metadata: 'Metadata'
 	};
 
 	// Use $derived so width/height stay in sync if pane prop changes
@@ -87,6 +89,10 @@
 			/>
 		{:else if pane.type === 'load-data'}
 			<LoadDataWidget />
+		{:else if pane.type === 'metadata'}
+			<MetadataWidget
+				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
+			/>
 		{/if}
 	</div>
 </div>

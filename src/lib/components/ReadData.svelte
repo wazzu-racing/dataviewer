@@ -3,6 +3,7 @@
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseDataLine } from '$lib/dataParser';
 	import { dataStore } from '$lib/stores/dataStore';
+	import { loadWazzuFile } from '$lib/fileFormat';
 
 	let { onDismiss }: { onDismiss?: () => void } = $props();
 
@@ -14,7 +15,22 @@
 		parseError = null;
 		const f = files[0];
 		const buffer = await f.arrayBuffer();
-		parse(buffer);
+
+		if (f.name.endsWith('.wazzuracing')) {
+			try {
+				const { telemetry, metadata } = await loadWazzuFile(buffer);
+				globalData.lines = telemetry;
+				globalData.metadata = metadata;
+				dataStore.update((old) => ({
+					...old,
+					telemetry: globalData.lines
+				}));
+			} catch (err: any) {
+				parseError = `Error parsing .wazzuracing file: ${err.message}`;
+			}
+		} else {
+			parse(buffer);
+		}
 	}
 
 	export async function parse(buffer: ArrayBuffer) {
@@ -60,7 +76,7 @@
 		type="file"
 		bind:files
 		onchange={handleLoadFile}
-		accept=".bin"
+		accept=".bin,.wazzuracing"
 		class="text-sm text-zinc-700 dark:text-neutral-300 file:mr-3 file:cursor-pointer file:rounded-md file:border-2 file:border-primary file:bg-background dark:file:bg-neutral-800 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-primary dark:file:text-neutral-100 transition-all duration-150 hover:file:bg-primary hover:file:text-white focus:file:ring-2 focus:file:ring-primary/70 focus:file:outline-none"
 	/>
 
