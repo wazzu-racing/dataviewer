@@ -21,34 +21,32 @@
 		isOpen = false;
 	}
 
-	function handleClickOutside(e: MouseEvent) {
-		const target = e.target as HTMLElement;
-		if (!target.closest('.layout-selector')) {
+	function handleWindowClick(event: MouseEvent) {
+		if (!isOpen) {
+			return;
+		}
+		const target = event.target as HTMLElement | null;
+		if (!target?.closest('.layout-selector')) {
 			isOpen = false;
 		}
 	}
-
-	$effect(() => {
-		if (isOpen) {
-			document.addEventListener('click', handleClickOutside);
-			return () => document.removeEventListener('click', handleClickOutside);
-		}
-	});
 
 	const currentLayout = $derived(layouts.find((l) => l.id === currentLayoutId));
 	const displayName = $derived(currentLayout?.name || 'No Layout');
 </script>
 
+<svelte:window onclick={handleWindowClick} />
+
 <div class="layout-selector relative inline-block">
 	<button
 		type="button"
 		onclick={toggleDropdown}
-		class="flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 text-sm font-medium transition-colors"
+		class="flex items-center gap-2 px-3 py-2 rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-primary dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-sm font-semibold transition-colors shadow-sm"
 		class:compact
 	>
 		<span class="truncate max-w-[200px]">{displayName}</span>
 		<svg
-			class="w-4 h-4 transition-transform"
+			class="w-4 h-4 transition-transform opacity-80"
 			class:rotate-180={isOpen}
 			fill="none"
 			stroke="currentColor"

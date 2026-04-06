@@ -25,11 +25,11 @@
 
 <!-- TopBar: fixed height + all styling, accepts parent classes via $attributes -->
 <div
-	class="w-full h-16 bg-primary dark:bg-neutral-900 text-white shadow-card flex items-center justify-between px-6 select-none dark:border-b dark:border-neutral-800"
+	class="w-full h-16 bg-primary dark:bg-neutral-900 shadow-card flex items-center justify-between px-6 select-none dark:border-b dark:border-neutral-800"
 >
 	<div class="flex gap-3 items-center">
 		<button
-			class="bg-white dark:bg-neutral-800 text-primary dark:text-primary hover:bg-background hover:dark:bg-neutral-700 hover:text-primary border border-primary dark:border-neutral-700 rounded-md px-3 py-1.5 transition-colors shadow-card disabled:opacity-50 flex items-center gap-2"
+			class="bg-white dark:bg-neutral-800 text-primary dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-primary/20 dark:border-neutral-700 rounded-md px-3 py-1.5 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
 			onclick={onOpenCommands}
 			title="Open Command Palette (Ctrl+Shift+P)"
 		>
@@ -49,17 +49,17 @@
 		<div class="h-6 w-px bg-white/20 mx-1"></div>
 
 		<button
-			class="bg-white dark:bg-neutral-800 text-primary dark:text-primary hover:bg-background hover:dark:bg-neutral-700 hover:text-primary border border-primary dark:border-neutral-700 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors shadow-card disabled:opacity-50"
+			class="bg-white dark:bg-neutral-800 text-primary dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-primary/20 dark:border-neutral-700 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
 			onclick={openChildWindow}
 		>
 			New Window
 		</button>
 
 		<!-- Layout Controls -->
-		<div class="flex gap-2 items-center border-l border-gray-300 dark:border-neutral-700 pl-3">
+		<div class="flex gap-2 items-center border-l border-white/20 pl-3">
 			<button
 				onclick={onSaveLayout}
-				class="bg-white dark:bg-neutral-800 text-primary dark:text-primary hover:bg-background hover:dark:bg-neutral-700 hover:text-primary border border-primary dark:border-neutral-700 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors shadow-card disabled:opacity-50"
+				class="bg-white dark:bg-neutral-800 text-primary dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-primary/20 dark:border-neutral-700 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
 				title="Save current layout"
 			>
 				Save Layout
@@ -69,7 +69,7 @@
 
 			<button
 				onclick={onManageLayouts}
-				class="bg-white dark:bg-neutral-800 text-primary dark:text-primary hover:bg-background hover:dark:bg-neutral-700 hover:text-primary border border-primary dark:border-neutral-700 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors shadow-card disabled:opacity-50"
+				class="bg-white dark:bg-neutral-800 text-primary dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-primary/20 dark:border-neutral-700 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
 				title="Manage layouts"
 			>
 				Manage
@@ -77,7 +77,7 @@
 		</div>
 	</div>
 	<div class="flex items-center gap-2">
-		<span class="tracking-wide text-lg font-bold uppercase dark:text-neutral-100">
+		<span class="tracking-wide text-lg font-bold uppercase text-white dark:text-neutral-100">
 			Wazzu Racing
 		</span>
 		<!-- add logo/icon/expand here later -->
