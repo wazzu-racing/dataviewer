@@ -2,15 +2,11 @@
 	import { browser } from '$app/environment';
 	import type { DataLine } from '$lib/types';
 	import {
-		WIDGET_LABELS,
 		type LayoutNode,
 		type FloatingPaneState,
 		type PaneWidgetType,
 		type DropPosition,
-		type SavedLayout,
-		type GraphConfig,
-		type TableConfig,
-		type GaugeConfig
+		type SavedLayout
 	} from '$lib/types';
 	import {
 		ensureIds,
@@ -49,13 +45,7 @@
 	import ManageLayoutsModal from '$lib/components/ManageLayoutsModal.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
-
-	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
-	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
-	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
-	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
-	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
-	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
+	import FullscreenOverlay from '$lib/components/FullscreenOverlay.svelte';
 
 	import { data as globalData } from '$lib/data.svelte';
 	import { dataStore } from '$lib/stores/dataStore';
@@ -674,49 +664,10 @@
 />
 
 {#if fullscreenNode}
-	<div
-		class="fixed inset-0 z-[500] flex flex-col bg-white dark:bg-neutral-950"
-		role="dialog"
-		aria-modal="true"
-		aria-label={`${WIDGET_LABELS[fullscreenNode.type]} fullscreen`}
-	>
-		<div
-			class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 px-4 py-2"
-		>
-			<span class="flex-1 text-sm font-semibold text-primary-900 dark:text-neutral-100">
-				{WIDGET_LABELS[fullscreenNode.type]} (Fullscreen)
-			</span>
-			<button
-				onclick={handleCloseFullscreen}
-				title="Exit Fullscreen"
-				class="rounded px-2 py-1 text-sm text-stone-400 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-800 hover:text-red-600 dark:hover:text-red-100 transition-colors"
-			>
-				✕ Exit Fullscreen
-			</button>
-		</div>
-		<div class="flex-1 min-h-0 overflow-hidden">
-			{#if fullscreenNode.type === 'graph'}
-				<GraphWidget
-					config={fullscreenConfig as GraphConfig | undefined}
-					onConfigChange={handleFullscreenConfigChange}
-				/>
-			{:else if fullscreenNode.type === 'map'}
-				<MapWidget />
-			{:else if fullscreenNode.type === 'table'}
-				<TableWidget
-					config={fullscreenConfig as TableConfig | undefined}
-					onConfigChange={handleFullscreenConfigChange}
-				/>
-			{:else if fullscreenNode.type === 'gauge'}
-				<GaugeWidget
-					config={fullscreenConfig as GaugeConfig | undefined}
-					onConfigChange={handleFullscreenConfigChange}
-				/>
-			{:else if fullscreenNode.type === 'load-data'}
-				<LoadDataWidget onDismiss={handleCloseFullscreen} />
-			{:else if fullscreenNode.type === 'metadata'}
-				<MetadataWidget onConfigChange={handleFullscreenConfigChange} />
-			{/if}
-		</div>
-	</div>
+	<FullscreenOverlay
+		node={fullscreenNode}
+		config={fullscreenConfig}
+		onClose={handleCloseFullscreen}
+		onConfigChange={handleFullscreenConfigChange}
+	/>
 {/if}

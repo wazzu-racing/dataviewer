@@ -4,6 +4,11 @@
 
 	let { onConfigChange }: { onConfigChange?: (config: Record<string, unknown>) => void } = $props();
 
+	$effect(() => {
+		const metadata = $state.snapshot(data.metadata);
+		onConfigChange?.(metadata);
+	});
+
 	async function handleExport() {
 		if (data.lines.length === 0) {
 			alert('No data to export.');
