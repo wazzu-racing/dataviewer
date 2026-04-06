@@ -4,8 +4,13 @@
 
 	let { onConfigChange }: { onConfigChange?: (config: Record<string, unknown>) => void } = $props();
 
+	let _mounted = false;
 	$effect(() => {
 		const metadata = $state.snapshot(data.metadata);
+		if (!_mounted) {
+			_mounted = true;
+			return;
+		}
 		onConfigChange?.(metadata);
 	});
 

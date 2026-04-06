@@ -64,6 +64,167 @@
 
 	type NumericField = (typeof NUMERIC_FIELDS)[number];
 
+	// Helper: Compute 3D time indicator plane data for restyle
+	function get3DIndicatorRestyleData(
+		x: NumericField,
+		ys: NumericField[],
+		zs: NumericField[],
+		currentLine: DataLine | undefined | null
+	) {
+		if (!currentLine) return null;
+
+		let timeAxis: 'x' | 'y' | 'z' | null = null;
+		let timeVal = 0;
+
+		if (isTimeField(x)) {
+			timeAxis = 'x';
+			timeVal = currentLine[x] as number;
+		} else {
+			const yTime = ys.find(isTimeField);
+			if (yTime) {
+				timeAxis = 'y';
+				timeVal = currentLine[yTime] as number;
+			} else {
+				const zTime = zs.find(isTimeField);
+				if (zTime) {
+					timeAxis = 'z';
+					timeVal = currentLine[zTime] as number;
+				}
+			}
+		}
+
+		if (!timeAxis || !isFinite(timeVal)) return null;
+
+		// We use the last calculated ranges to avoid re-scanning the telemetry on every frame
+		// Plotly traces usually store their min/max or we can grab them from the layout
+		if (!plotlyInstance || !plotlyInstance._fullLayout || !plotlyInstance._fullLayout.scene) {
+			return null;
+		}
+
+		const scene = plotlyInstance._fullLayout.scene;
+		const xr = scene.xaxis.range;
+		const yr = scene.yaxis.range;
+		const zr = scene.zaxis.range;
+
+		if (timeAxis === 'x') {
+			return {
+				x: [[timeVal, timeVal, timeVal, timeVal]],
+				y: [[yr[0], yr[1], yr[1], yr[0]]],
+				z: [[zr[0], zr[0], zr[1], zr[1]]]
+			};
+		} else if (timeAxis === 'y') {
+			return {
+				x: [[xr[0], xr[1], xr[1], xr[0]]],
+				y: [[timeVal, timeVal, timeVal, timeVal]],
+				z: [[zr[0], zr[0], zr[1], zr[1]]]
+			};
+		} else if (timeAxis === 'z') {
+			return {
+				x: [[xr[0], xr[1], xr[1], xr[0]]],
+				y: [[yr[0], yr[0], yr[1], yr[1]]],
+				z: [[timeVal, timeVal, timeVal, timeVal]]
+			};
+		}
+		return null;
+	}
+
+	// Helper: Compute 3D time indicator plane
+	function get3DTimeIndicator(
+		x: NumericField,
+		ys: NumericField[],
+		zs: NumericField[],
+		currentLine: DataLine | undefined | null
+	) {
+		if (!currentLine) return null;
+
+		// Check which axis is the time field
+		let timeAxis: 'x' | 'y' | 'z' | null = null;
+		let timeVal = 0;
+
+		if (isTimeField(x)) {
+			timeAxis = 'x';
+			timeVal = currentLine[x] as number;
+		} else {
+			const yTime = ys.find(isTimeField);
+			if (yTime) {
+				timeAxis = 'y';
+				timeVal = currentLine[yTime] as number;
+			} else {
+				const zTime = zs.find(isTimeField);
+				if (zTime) {
+					timeAxis = 'z';
+					timeVal = currentLine[zTime] as number;
+				}
+			}
+		}
+
+		if (!timeAxis || !isFinite(timeVal)) return null;
+
+		// We'll use a mesh3d or surface to create a plane.
+		// For a plane perpendicular to an axis, we need the ranges of the other two axes.
+		// Since we don't easily have the current view ranges here without layout,
+		// we'll rely on Plotly to scale it if we provide large enough bounds or
+		// better, we can use the data bounds.
+		const lines = $dataStore.telemetry;
+		if (lines.length === 0) return null;
+
+		const getRange = (field: NumericField | NumericField[]) => {
+			const fields = Array.isArray(field) ? field : [field];
+			let min = Infinity;
+			let max = -Infinity;
+			for (const line of lines) {
+				for (const f of fields) {
+					const v = line[f] as number;
+					if (isFinite(v)) {
+						if (v < min) min = v;
+						if (v > max) max = v;
+					}
+				}
+			}
+			return [min, max];
+		};
+
+		const xRange = getRange(x);
+		const yRange = getRange(ys);
+		const zRange = getRange(zs);
+
+		// Create a rectangular plane trace
+		// We use 4 points to define a plane
+		let planeTrace: any = {
+			type: 'mesh3d',
+			opacity: 0.2,
+			color: 'rgba(236, 72, 153, 0.5)',
+			hoverinfo: 'skip',
+			showlegend: false,
+			name: 'Time Indicator'
+		};
+
+		if (timeAxis === 'x') {
+			planeTrace.x = [timeVal, timeVal, timeVal, timeVal];
+			planeTrace.y = [yRange[0], yRange[1], yRange[1], yRange[0]];
+			planeTrace.z = [zRange[0], zRange[0], zRange[1], zRange[1]];
+			planeTrace.i = [0, 0];
+			planeTrace.j = [1, 2];
+			planeTrace.k = [2, 3];
+		} else if (timeAxis === 'y') {
+			planeTrace.x = [xRange[0], xRange[1], xRange[1], xRange[0]];
+			planeTrace.y = [timeVal, timeVal, timeVal, timeVal];
+			planeTrace.z = [zRange[0], zRange[0], zRange[1], zRange[1]];
+			planeTrace.i = [0, 0];
+			planeTrace.j = [1, 2];
+			planeTrace.k = [2, 3];
+		} else if (timeAxis === 'z') {
+			planeTrace.x = [xRange[0], xRange[1], xRange[1], xRange[0]];
+			planeTrace.y = [yRange[0], yRange[0], yRange[1], yRange[1]];
+			planeTrace.z = [timeVal, timeVal, timeVal, timeVal];
+			planeTrace.i = [0, 0];
+			planeTrace.j = [1, 2];
+			planeTrace.k = [2, 3];
+		}
+
+		return planeTrace;
+	}
+
 	// Helper: Compute time indicator shape for Plotly layout
 	function getTimeIndicatorShape(
 		x: NumericField,
@@ -504,16 +665,22 @@
 		// Branch: 2D vs 3D rendering
 		if (is3D) {
 			// ============ 3D RENDERING PATH ============
+			// Optimization: Use decimated data for 3D plots if dataset is large
+			const MAX_3D_POINTS = 5000;
+			const step = Math.max(1, Math.floor(lines.length / MAX_3D_POINTS));
+
 			const xs: number[] = [];
 			const yArrays: number[][] = ys.map(() => []);
 			const zArrays: number[][] = zs.map(() => []);
-			for (const line of lines) {
+
+			for (let i = 0; i < lines.length; i += step) {
+				const line = lines[i];
 				xs.push(line[x] as number);
-				for (let i = 0; i < ys.length; i++) {
-					yArrays[i].push(line[ys[i]] as number);
+				for (let j = 0; j < ys.length; j++) {
+					yArrays[j].push(line[ys[j]] as number);
 				}
-				for (let i = 0; i < zs.length; i++) {
-					zArrays[i].push(line[zs[i]] as number);
+				for (let j = 0; j < zs.length; j++) {
+					zArrays[j].push(line[zs[j]] as number);
 				}
 			}
 
@@ -569,6 +736,12 @@
 						traces.push(surfaceTrace);
 					}
 				}
+			}
+
+			// Add 3D time indicator plane if any axis is time-based
+			const indicator3D = get3DTimeIndicator(x, ys, zs, $timeIndexStore.currentLine);
+			if (indicator3D) {
+				traces.push(indicator3D);
 			}
 
 			// 3D layout
@@ -925,14 +1098,24 @@
 								'yaxis2.range': [ny0, ny1]
 							});
 						} else {
+							// Update only on changes to ensure stability
 							plotlyLib.relayout(plotlyInstance, {
 								'xaxis.range': [nx0, nx1],
 								'yaxis.range': [ny0, ny1]
 							});
 						}
-						// END of wheelHandler
-						// (Redundant relayouts removed in accordance with code review)
-						// Only a single relayout per wheel event is necessary.
+
+						// Sync time indicator on zoom/pan to prevent visual lag
+						const indicatorShape = getTimeIndicatorShape(
+							xField,
+							yFields,
+							$timeIndexStore.currentLine
+						);
+						if (!is3D && indicatorShape) {
+							plotlyLib.relayout(plotlyInstance, {
+								shapes: [indicatorShape]
+							});
+						}
 					}
 
 					el.addEventListener('wheel', wheelHandler, { passive: false });
@@ -977,13 +1160,34 @@
 
 	// Global time indicator now handled as a Plotly shape (see layout.shapes logic)
 
-	// EFFECT: Move indicator only on time change (no layout/pan reset)
 	// EFFECT: Only update indicator when time or axes change (never full redraw)
-	// NOTE: Time indicator only works in 2D mode; 3D mode doesn't support 2D shapes overlay
+	// NOTE: Time indicator works differently in 3D mode via trace update
 	$effect(() => {
 		if (!browser || !plotlyLib || !plotlyInstance) return;
-		// Skip time indicator in 3D mode
-		if (is3D) return;
+
+		if (is3D) {
+			// In 3D mode, update the time indicator trace if it exists
+			const currentTraces = plotlyInstance.data;
+			const indicatorIdx = currentTraces.findIndex((t: any) => t.name === 'Time Indicator');
+
+			if (indicatorIdx !== -1) {
+				const restyleData = get3DIndicatorRestyleData(
+					xField,
+					yFields,
+					zFields,
+					$timeIndexStore.currentLine
+				);
+				if (restyleData) {
+					// Optimization: Use requestAnimationFrame for smooth UI updates
+					requestAnimationFrame(() => {
+						if (!plotlyInstance) return;
+						plotlyLib.restyle(plotlyInstance, restyleData, [indicatorIdx]);
+					});
+				}
+			}
+			return;
+		}
+
 		const indicatorShape = getTimeIndicatorShape(xField, yFields, $timeIndexStore.currentLine);
 		// Only the shapes array is updated; this preserves all zoom/pan state
 		plotlyLib.relayout(plotlyInstance, {
