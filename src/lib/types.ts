@@ -64,6 +64,9 @@ export type XDisplayMode = 'raw' | 'relative' | 'absolute';
 /** Type of 3D visualization mode */
 export type Graph3DMode = '3d-scatter' | '3d-surface';
 
+/** Type of 2D visualization mode */
+export type Graph2DMode = 'line' | 'scatter' | 'area';
+
 /**
  * Per-pane configuration for the Graph widget.
  * Supports both 2D and 3D graph modes.
@@ -78,6 +81,8 @@ export type GraphConfig = {
 	zFields?: string[];
 	/** Type of 3D visualization: scatter (points/lines) or surface (heatmap) */
 	mode3D?: Graph3DMode;
+	/** Type of 2D visualization: line, scatter, or area */
+	mode2D?: Graph2DMode;
 };
 
 /** Per-pane configuration for the Gauge widget */

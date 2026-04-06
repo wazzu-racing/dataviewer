@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { dataStore } from '$lib/stores/dataStore';
 	import { timeIndexStore } from '$lib/stores/time';
-	import type { DataLine, GraphConfig, XDisplayMode, Graph3DMode } from '$lib/types';
+	import type { DataLine, GraphConfig, XDisplayMode, Graph3DMode, Graph2DMode } from '$lib/types';
 	import { browser, dev } from '$app/environment';
 	import { untrack, onMount } from 'svelte'; // onMount is used for browser-only Plotly integration
 	// Plotly import moved to browser-only lifecycle below
@@ -317,6 +317,7 @@
 			: ['rpm']
 	);
 	const _seedMode3D: Graph3DMode = untrack(() => _cfg?.mode3D ?? '3d-scatter');
+	const _seedMode2D: Graph2DMode = untrack(() => _cfg?.mode2D ?? 'line');
 
 	// ---------------------------------------------------------------------------
 	// Widget state — seeded once from persisted config
@@ -354,6 +355,7 @@
 	let is3D: boolean = $state(_seedIs3D);
 	let zFields: NumericField[] = $state([..._seedZ]);
 	let mode3D: Graph3DMode = $state(_seedMode3D);
+	let mode2D: Graph2DMode = $state(_seedMode2D);
 
 	// Reset display mode to 'raw' when the user switches to a non-time field,
 	// and notify the parent of the combined change (new xField + reset xDisplayMode).
@@ -834,16 +836,41 @@
 
 			const traces = sortedYs.map((ysArr, i) => {
 				const axis = i === 0 ? 'y' : 'y2';
-				return {
+				const color = SERIES_COLORS[i % SERIES_COLORS.length];
+				const baseTrace: any = {
 					x: sortedXs,
 					y: ysArr,
-					type: 'scattergl',
-					mode: 'lines',
 					name: prettyLabel(ys[i]),
-					line: { color: SERIES_COLORS[i % SERIES_COLORS.length], width: 1.5 },
 					hoverinfo: 'x+y+name',
 					yaxis: axis
 				};
+
+				switch (mode2D) {
+					case 'scatter':
+						return {
+							...baseTrace,
+							type: 'scattergl',
+							mode: 'markers',
+							marker: { size: 6, color }
+						};
+					case 'area':
+						return {
+							...baseTrace,
+							type: 'scattergl',
+							mode: 'lines',
+							fill: 'tozeroy',
+							fillcolor: color + '40', // 25% opacity
+							line: { color, width: 1.5 }
+						};
+					case 'line':
+					default:
+						return {
+							...baseTrace,
+							type: 'scattergl',
+							mode: 'lines',
+							line: { color, width: 1.5 }
+						};
+				}
 			});
 
 			const layout: any = {
@@ -1238,7 +1265,8 @@
 			xDisplayMode,
 			is3D,
 			zFields: [...zFields],
-			mode3D
+			mode3D,
+			mode2D
 		});
 	}
 </script>
@@ -1258,6 +1286,7 @@
 			X
 			<select
 				bind:value={xField}
+				onchange={notifyConfigChange}
 				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
 			>
 				{#each NUMERIC_FIELDS as f (f)}
@@ -1294,6 +1323,20 @@
 		>
 			{is3D ? '3D' : '2D'}
 		</button>
+
+		<!-- 2D Mode Selector — only shown in 2D mode -->
+		{#if !is3D}
+			<select
+				bind:value={mode2D}
+				onchange={notifyConfigChange}
+				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
+				title="2D visualization type"
+			>
+				<option value="line">Line</option>
+				<option value="scatter">Scatter</option>
+				<option value="area">Area</option>
+			</select>
+		{/if}
 
 		<!-- 3D Mode Selector (scatter vs surface) — only shown in 3D mode -->
 		{#if is3D}
