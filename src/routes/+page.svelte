@@ -8,7 +8,9 @@
 		type PaneWidgetType,
 		type DropPosition,
 		type SavedLayout,
-		type GraphConfig
+		type GraphConfig,
+		type TableConfig,
+		type GaugeConfig
 	} from '$lib/types';
 	import {
 		ensureIds,
@@ -560,8 +562,8 @@
 	});
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
-		// Escape to close fullscreen
-		if (e.key === 'Escape' && fullscreenNode) {
+		// Escape to close fullscreen, but let the command palette handle Escape first when open.
+		if (!showCommandPalette && e.key === 'Escape' && fullscreenNode) {
 			handleCloseFullscreen();
 			return;
 		}
@@ -603,6 +605,9 @@
 				onFullscreen={(id) => handleFullscreen(id, false)}
 				onConfigChange={handleLayoutConfigChange}
 				onMove={handleMove}
+				fullscreenPaneId={fullscreenNode && !fullscreenNode.isFloating
+					? fullscreenNode.id
+					: undefined}
 			/>
 
 			{#each floatingPanes as pane (pane.id)}
@@ -613,6 +618,7 @@
 					onDock={handleDock}
 					onFullscreen={(id) => handleFullscreen(id, true)}
 					onConfigChange={handleFloatConfigChange}
+					hidden={fullscreenNode?.id === pane.id && fullscreenNode.isFloating}
 				/>
 			{/each}
 		</div>

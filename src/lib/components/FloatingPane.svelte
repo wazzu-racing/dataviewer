@@ -20,9 +20,18 @@
 		onDock: (id: string) => void;
 		onFullscreen?: (id: string) => void;
 		onConfigChange: (id: string, config: Record<string, unknown>) => void;
+		hidden?: boolean;
 	};
 
-	let { pane, onClose, onFocus, onDock, onFullscreen, onConfigChange }: Props = $props();
+	let {
+		pane,
+		onClose,
+		onFocus,
+		onDock,
+		onFullscreen,
+		onConfigChange,
+		hidden = false
+	}: Props = $props();
 
 	// Use $derived so width/height stay in sync if pane prop changes
 	const width = $derived(pane.width);
@@ -36,7 +45,9 @@
 		defaultPosition: { x: pane.x, y: pane.y }
 	}}
 	class="absolute flex flex-col overflow-hidden rounded-lg border border-border dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-card"
-	style="width:{width}px; height:{height}px; z-index:{pane.zIndex}; resize:both; min-width:200px; min-height:140px;"
+	style="width:{width}px; height:{height}px; z-index:{pane.zIndex}; resize:both; min-width:200px; min-height:140px; {hidden
+		? 'visibility:hidden;'
+		: ''}"
 	onmousedown={() => onFocus(pane.id)}
 	role="dialog"
 	tabindex="-1"
