@@ -1295,62 +1295,6 @@
 			</select>
 		</label>
 
-		<!-- Timestamp display mode toggle — only shown for time-based x fields -->
-		{#if isTimeField(xField)}
-			<label
-				class="flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
-			>
-				<select
-					bind:value={xDisplayMode}
-					onchange={notifyConfigChange}
-					class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
-				>
-					<option value="raw">Raw</option>
-					<option value="relative">Relative</option>
-					<option value="absolute">Absolute</option>
-				</select>
-			</label>
-		{/if}
-
-		<!-- 2D/3D Toggle Button -->
-		<button
-			onclick={() => {
-				is3D = !is3D;
-				notifyConfigChange();
-			}}
-			class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm hover:bg-primary/10 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
-			title={is3D ? 'Switch to 2D graph' : 'Switch to 3D graph'}
-		>
-			{is3D ? '3D' : '2D'}
-		</button>
-
-		<!-- 2D Mode Selector — only shown in 2D mode -->
-		{#if !is3D}
-			<select
-				bind:value={mode2D}
-				onchange={notifyConfigChange}
-				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
-				title="2D visualization type"
-			>
-				<option value="line">Line</option>
-				<option value="scatter">Scatter</option>
-				<option value="area">Area</option>
-			</select>
-		{/if}
-
-		<!-- 3D Mode Selector (scatter vs surface) — only shown in 3D mode -->
-		{#if is3D}
-			<select
-				bind:value={mode3D}
-				onchange={notifyConfigChange}
-				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
-				title="3D visualization type"
-			>
-				<option value="3d-scatter">Scatter</option>
-				<option value="3d-surface">Surface</option>
-			</select>
-		{/if}
-
 		<!-- Y series multi-select dropdown -->
 		<div
 			class="relative flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
@@ -1464,6 +1408,45 @@
 		{/if}
 
 		<div class="ml-auto flex items-center gap-2">
+			<!-- 2D Mode Selector — only shown in 2D mode -->
+			{#if !is3D}
+				<select
+					bind:value={mode2D}
+					onchange={notifyConfigChange}
+					class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
+					title="2D visualization type"
+				>
+					<option value="line">Line</option>
+					<option value="scatter">Scatter</option>
+					<option value="area">Area</option>
+				</select>
+			{/if}
+
+			<!-- 3D Mode Selector (scatter vs surface) — only shown in 3D mode -->
+			{#if is3D}
+				<select
+					bind:value={mode3D}
+					onchange={notifyConfigChange}
+					class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
+					title="3D visualization type"
+				>
+					<option value="3d-scatter">Scatter</option>
+					<option value="3d-surface">Surface</option>
+				</select>
+			{/if}
+
+			<!-- 2D/3D Toggle Button -->
+			<button
+				onclick={() => {
+					is3D = !is3D;
+					notifyConfigChange();
+				}}
+				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm hover:bg-primary/10 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
+				title={is3D ? 'Switch to 2D graph' : 'Switch to 3D graph'}
+			>
+				{is3D ? '3D' : '2D'}
+			</button>
+
 			{#if $dataStore.telemetry.length > 0}
 				<span class="text-xs text-stone-400 dark:text-neutral-400">
 					{$dataStore.telemetry.length.toLocaleString()} pts
