@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { NUM_FIELDS } from '$lib/types';
 	import { data as globalData } from '$lib/data.svelte';
-	import { parseDataLine } from '$lib/dataParser';
+	import { parseBinaryBuffer } from '$lib/dataParser';
 	import { dataStore } from '$lib/stores/dataStore';
 	import { loadWazzuFile } from '$lib/fileFormat';
 
@@ -34,33 +33,17 @@
 	}
 
 	export async function parse(buffer: ArrayBuffer) {
-		const dataview = new DataView(buffer);
+		try {
+			globalData.lines = parseBinaryBuffer(buffer);
 
-		const bytesPerRow = 4 * NUM_FIELDS;
-		const numRows = Math.floor(buffer.byteLength / bytesPerRow);
-
-		const rawRows: number[][] = [];
-
-		for (let row_i = 0; row_i < numRows; row_i++) {
-			const row: number[] = [];
-			try {
-				for (let i = 0; i < NUM_FIELDS; i++) {
-					row.push(dataview.getInt32(row_i * bytesPerRow + 4 * i, true)); // little-endian
-				}
-			} catch {
-				parseError = `Corrupted data at row ${row_i} — file may be truncated or malformed.`;
-				return;
-			}
-			rawRows.push(row);
+			// Synchronize telemetry to shared dataStore!
+			dataStore.update((old) => ({
+				...old,
+				telemetry: globalData.lines
+			}));
+		} catch (err: any) {
+			parseError = `Corrupted data — file may be truncated or malformed: ${err.message}`;
 		}
-
-		globalData.lines = rawRows.map(parseDataLine);
-
-		// Synchronize telemetry to shared dataStore!
-		dataStore.update((old) => ({
-			...old,
-			telemetry: globalData.lines
-		}));
 	}
 </script>
 

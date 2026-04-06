@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+
 	// Svelte 5 runes only!
 	const REPO = 'wazzu-racing/log_files';
 	const API_ROOT = `https://api.github.com/repos/${REPO}/contents`;
@@ -121,6 +124,9 @@
 						class="w-full text-left text-blue-600 dark:text-blue-400 cursor-pointer hover:underline"
 						onclick={async () => {
 							if (!node.download_url) return;
+							const url = new URL(page.url);
+							url.searchParams.set('data', node.download_url);
+							replaceState(url, {});
 							await onFileSelected(node.download_url);
 						}}
 					>

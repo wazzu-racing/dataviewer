@@ -34,6 +34,7 @@
 		renameLayout as renameLayoutInStore,
 		duplicateLayout as duplicateLayoutInStore
 	} from '$lib/stores/layoutStore';
+	import { deserializeLayout, generateShareUrl } from '$lib/shareUtils';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 
@@ -61,6 +62,7 @@
 	import { dataStore } from '$lib/stores/dataStore';
 	import type { Command } from '$lib/types';
 	import { saveWazzuFile, convertBinToWazzu } from '$lib/fileFormat';
+	import { fade } from 'svelte/transition';
 
 	async function handleExportWazzu() {
 		if (globalData.lines.length === 0) {
@@ -122,25 +124,15 @@
 		return defaultLayout();
 	}
 
-	// Always prompt for data on every page load — telemetry is never persisted across sessions.
-	let showLoadDataModal: boolean = $state(true);
-
-	$effect(() => {
-		if (browser) {
-			if (showLoadDataModal) {
-				document.body.classList.add('modal-open');
-			} else {
-				document.body.classList.remove('modal-open');
-			}
-		}
-	});
-
 	// ---------------------------------------------------------------------------
 	// Window handling
 	// ---------------------------------------------------------------------------
 
 	let isChild: boolean = false;
 	let windowObject: Window | null = null;
+
+	// Always prompt for data on every page load — telemetry is never persisted across sessions.
+	let showLoadDataModal: boolean = $state(true);
 
 	setIsChild();
 
@@ -190,13 +182,85 @@
 	}
 
 	// Load the active layout or default
-	const initialLayoutData = browser
+	let initialLayoutData = browser
 		? loadActiveLayout(isChild)
 		: { layout: defaultLayout(), floatingPanes: [], layoutId: null };
+
+	// Handle shared layout from URL
+	let isSharedLayout = false;
+	if (browser) {
+		const params = new URLSearchParams(window.location.search);
+		const sharedLayoutBase64 = params.get('layout');
+		if (sharedLayoutBase64) {
+			const decoded = deserializeLayout(sharedLayoutBase64);
+			if (decoded) {
+				initialLayoutData = {
+					layout: decoded.layout,
+					floatingPanes: decoded.floatingPanes,
+					layoutId: null
+				};
+				isSharedLayout = true;
+				showLoadDataModal = false;
+			}
+		}
+
+		const dataUrl = params.get('data');
+		if (dataUrl) {
+			showLoadDataModal = false;
+		}
+	}
+
+	$effect(() => {
+		if (browser) {
+			if (showLoadDataModal) {
+				document.body.classList.add('modal-open');
+			} else {
+				document.body.classList.remove('modal-open');
+			}
+		}
+	});
 
 	let layout: LayoutNode = $state(initialLayoutData.layout);
 	let floatingPanes: FloatingPaneState[] = $state(initialLayoutData.floatingPanes);
 	let activeLayoutId: string | null = $state(initialLayoutData.layoutId);
+
+	import { parseBinaryBuffer } from '$lib/dataParser';
+
+	// Handle shared data from URL
+	$effect(() => {
+		if (browser) {
+			const params = new URLSearchParams(window.location.search);
+			const dataUrl = params.get('data');
+			if (dataUrl) {
+				console.log('Fetching shared data from:', dataUrl);
+				fetch(dataUrl)
+					.then((res) => {
+						if (!res.ok)
+							throw new Error(`Could not fetch shared data: ${res.status} ${res.statusText}`);
+						return res.arrayBuffer();
+					})
+					.then((buffer) => {
+						const parsedLines = parseBinaryBuffer(buffer);
+						console.log('Parsed lines count:', parsedLines.length);
+
+						// Batch updates to global state
+						globalData.lines = parsedLines;
+						dataStore.set({
+							telemetry: parsedLines,
+							widgets: [] // Ensure we don't wipe out other state if it exists
+						});
+
+						showLoadDataModal = false;
+						console.log('Data loaded successfully from URL');
+					})
+					.catch((err: any) => {
+						console.error('Error loading shared data:', err);
+						alert('Failed to load shared data: ' + err.message);
+					});
+			}
+		}
+	});
+
 	let layouts: SavedLayout[] = $state(browser ? getAllLayouts(isChild) : []);
 
 	// FloatingPane z-index convention: max 40 (modal = z-[1000], time slider = z-20, overlays = z-10)
@@ -469,11 +533,43 @@
 	}
 
 	// ---------------------------------------------------------------------------
+	// Sharing logic
+	// ---------------------------------------------------------------------------
+	let showShareSuccess = $state(false);
+
+	function handleShare() {
+		const params = new URLSearchParams(window.location.search);
+		const dataUrl = params.get('data') || undefined;
+		const shareUrl = generateShareUrl(dataUrl, layout, floatingPanes);
+
+		console.log('Generating share link with dataUrl:', dataUrl);
+
+		navigator.clipboard
+			.writeText(shareUrl)
+			.then(() => {
+				showShareSuccess = true;
+				setTimeout(() => {
+					showShareSuccess = false;
+				}, 3000);
+			})
+			.catch((err) => {
+				console.error('Failed to copy share link:', err);
+				alert('Failed to copy share link. You can copy it from the URL bar after sharing.');
+			});
+	}
+
+	// ---------------------------------------------------------------------------
 	// Command Palette
 	// ---------------------------------------------------------------------------
 	let showCommandPalette = $state(false);
 
 	const staticCommands: Command[] = [
+		{
+			id: 'share-screen',
+			label: 'Share Layout',
+			description: 'Copy a shareable link of the current layout and data',
+			action: handleShare
+		},
 		{
 			id: 'new-window',
 			label: 'New Window',
@@ -603,6 +699,26 @@
 	<div class="flex flex-1 overflow-hidden">
 		<PaneToolbar onAddPane={handleAddPane} />
 		<div class="relative flex-1 overflow-hidden">
+			{#if showShareSuccess}
+				<div
+					class="absolute top-4 right-4 z-[100] flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-lg transition-all"
+					transition:fade
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="3"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="20 6 9 17 4 12" />
+					</svg>
+					Share link copied!
+				</div>
+			{/if}
 			<PaneLayout
 				{layout}
 				onDrop={handleDrop}

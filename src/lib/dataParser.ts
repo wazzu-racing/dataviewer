@@ -1,4 +1,4 @@
-import type { DataLine } from './types';
+import { NUM_FIELDS, type DataLine } from './types';
 
 // ---------------------------------------------------------------------------
 // Scaling constants for binary telemetry fields
@@ -121,4 +121,24 @@ export function parseDataLine(row: number[]): DataLine {
 		brake1: scaleBrake(row[46]),
 		brake2: scaleBrake(row[47])
 	};
+}
+
+/**
+ * Parses an entire binary ArrayBuffer into DataLine[].
+ */
+export function parseBinaryBuffer(buffer: ArrayBuffer): DataLine[] {
+	const dataview = new DataView(buffer);
+	const bytesPerRow = 4 * NUM_FIELDS;
+	const numRows = Math.floor(buffer.byteLength / bytesPerRow);
+	const lines: DataLine[] = [];
+
+	for (let row_i = 0; row_i < numRows; row_i++) {
+		const row: number[] = [];
+		for (let i = 0; i < NUM_FIELDS; i++) {
+			row.push(dataview.getInt32(row_i * bytesPerRow + 4 * i, true));
+		}
+		lines.push(parseDataLine(row));
+	}
+
+	return lines;
 }
