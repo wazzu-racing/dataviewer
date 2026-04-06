@@ -2,8 +2,7 @@
 	import { data } from '$lib/data.svelte';
 	import { saveWazzuFile } from '$lib/fileFormat';
 
-	let { onConfigChange }: { onConfigChange?: (config: Record<string, unknown>) => void } =
-		$props();
+	let { onConfigChange }: { onConfigChange?: (config: Record<string, unknown>) => void } = $props();
 
 	$effect(() => {
 		const metadata = $state.snapshot(data.metadata);

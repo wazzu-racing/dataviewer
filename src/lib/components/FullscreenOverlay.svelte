@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focus } from '$lib/actions';
 	import {
 		WIDGET_LABELS,
 		type PaneWidgetType,
@@ -15,7 +16,7 @@
 
 	type Props = {
 		node: { id: string; type: PaneWidgetType; isFloating: boolean };
-		config: any;
+		config: unknown;
 		onClose: () => void;
 		onConfigChange: (config: Record<string, unknown>) => void;
 	};
@@ -23,7 +24,12 @@
 	let { node, config, onClose, onConfigChange }: Props = $props();
 </script>
 
-<div class="fixed inset-0 z-[500] flex flex-col bg-white dark:bg-neutral-950">
+<div
+	class="fixed inset-0 z-[500] flex flex-col bg-white dark:bg-neutral-950"
+	role="dialog"
+	aria-modal="true"
+	aria-label="{WIDGET_LABELS[node.type]} (Fullscreen)"
+>
 	<div
 		class="flex shrink-0 items-center gap-1 border-b border-border dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 px-4 py-2"
 	>
@@ -33,6 +39,7 @@
 		<button
 			onclick={onClose}
 			title="Exit Fullscreen"
+			use:focus
 			class="rounded px-2 py-1 text-sm text-stone-400 dark:text-neutral-300 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary transition-colors"
 		>
 			✕ Exit Fullscreen

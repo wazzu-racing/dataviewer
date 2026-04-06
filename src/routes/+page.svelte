@@ -2,15 +2,11 @@
 	import { browser } from '$app/environment';
 	import type { DataLine } from '$lib/types';
 	import {
-		WIDGET_LABELS,
 		type LayoutNode,
 		type FloatingPaneState,
 		type PaneWidgetType,
 		type DropPosition,
-		type SavedLayout,
-		type GraphConfig,
-		type TableConfig,
-		type GaugeConfig
+		type SavedLayout
 	} from '$lib/types';
 	import {
 		ensureIds,
