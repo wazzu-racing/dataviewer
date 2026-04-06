@@ -48,6 +48,24 @@ function getDefaultLayout(): LayoutNode {
 }
 
 /**
+ * Appends a disambiguating counter suffix to `name` until it is unique among
+ * `existingLayouts[*].name`, skipping the entry with `excludeId` if provided.
+ */
+function ensureUniqueName(
+	name: string,
+	existingLayouts: { id: string; name: string }[],
+	excludeId?: string
+): string {
+	let finalName = name;
+	let counter = 2;
+	while (existingLayouts.some((l) => l.name === finalName && l.id !== excludeId)) {
+		finalName = `${name} (${counter})`;
+		counter++;
+	}
+	return finalName;
+}
+
+/**
  * Migrate existing old-format layout from localStorage to a new "Default" saved layout
  * This is a one-time migration that runs on first load
  */
@@ -161,12 +179,7 @@ export function saveLayout(
 	}
 
 	// Check for duplicate names and append number if needed
-	let finalName = name;
-	let counter = 2;
-	while (data.layouts.some((l) => l.name === finalName && l.id !== existingId)) {
-		finalName = `${name} (${counter})`;
-		counter++;
-	}
+	const finalName = ensureUniqueName(name, data.layouts, existingId);
 
 	// Create new layout
 	const newLayout: SavedLayout = {
@@ -231,12 +244,7 @@ export function renameLayout(id: string, newName: string, isChild: boolean): voi
 
 	if (index !== -1) {
 		// Check for duplicate names
-		let finalName = newName;
-		let counter = 2;
-		while (data.layouts.some((l) => l.name === finalName && l.id !== id)) {
-			finalName = `${newName} (${counter})`;
-			counter++;
-		}
+		const finalName = ensureUniqueName(newName, data.layouts, id);
 
 		data.layouts[index].name = finalName;
 		saveStoreData(data, isChild);
@@ -256,13 +264,8 @@ export function duplicateLayout(id: string, isChild: boolean): string | null {
 	const now = Date.now();
 
 	// Generate unique name with duplicate detection
-	let baseName = `${original.name} (Copy)`;
-	let finalName = baseName;
-	let counter = 2;
-	while (data.layouts.some((l) => l.name === finalName)) {
-		finalName = `${baseName} (${counter})`;
-		counter++;
-	}
+	const baseName = `${original.name} (Copy)`;
+	const finalName = ensureUniqueName(baseName, data.layouts);
 
 	const newLayout: SavedLayout = {
 		id: generateUUID(),

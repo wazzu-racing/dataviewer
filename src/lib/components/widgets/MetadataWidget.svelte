@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { data } from '$lib/data.svelte';
-	import { saveWazzuFile } from '$lib/fileFormat';
+	import { saveWazzuFile, downloadBlob } from '$lib/fileFormat';
 
 	let { onConfigChange }: { onConfigChange?: (config: Record<string, unknown>) => void } = $props();
 
@@ -22,12 +22,7 @@
 
 		const metadata = $state.snapshot(data.metadata);
 		const blob = await saveWazzuFile(data.lines, metadata);
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
-		a.click();
-		URL.revokeObjectURL(url);
+		downloadBlob(blob, `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`);
 	}
 </script>
 

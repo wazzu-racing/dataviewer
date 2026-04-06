@@ -3,10 +3,11 @@
 	import { browser } from '$app/environment';
 	import { loadLeaflet } from '$lib/leaflet';
 	import { timeIndexStore } from '$lib/stores/time';
+	import type * as L from 'leaflet';
 
 	let mapContainer: HTMLDivElement | undefined = $state();
-	let leafletMap: any = null;
-	let trackLine: any = null;
+	let leafletMap: L.Map | null = null;
+	let trackLine: L.Polyline | null = null;
 
 	// HACK: compute if there is any usable GPS data, up front and after import
 	const hasData = $derived(
@@ -105,7 +106,7 @@
 	});
 
 	// Global time position marker with brand accent
-	let timeMarker: any = null;
+	let timeMarker: L.CircleMarker | null = null;
 	$effect(() => {
 		if (!browser || !leafletMap || !hasData) {
 			if (timeMarker) {

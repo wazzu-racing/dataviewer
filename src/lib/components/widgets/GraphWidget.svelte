@@ -1,68 +1,19 @@
 <script lang="ts">
 	import { dataStore } from '$lib/stores/dataStore';
 	import { timeIndexStore } from '$lib/stores/time';
-	import type { DataLine, GraphConfig, XDisplayMode, Graph3DMode, Graph2DMode } from '$lib/types';
+	import {
+		type DataLine,
+		type GraphConfig,
+		type XDisplayMode,
+		type Graph3DMode,
+		type Graph2DMode,
+		NUMERIC_FIELDS,
+		type NumericField
+	} from '$lib/types';
 	import { browser, dev } from '$app/environment';
 	import { untrack, onMount } from 'svelte'; // onMount is used for browser-only Plotly integration
 	// Plotly import moved to browser-only lifecycle below
 	import { isTimeField, formatRelative, formatAbsolute } from '$lib/timeFormat';
-
-	// Plotly will be used for chart rendering.
-	// ---------------------------------------------------------------------------
-	// All numeric (plottable) keys from DataLine — excludes 'unixtime' (Date)
-	// Must be defined before Props so NumericField type is available
-	// ---------------------------------------------------------------------------
-	const NUMERIC_FIELDS = [
-		'write_millis',
-		'ecu_millis',
-		'gps_millis',
-		'imu_millis',
-		'accel_millis',
-		'analogx1_millis',
-		'analogx2_millis',
-		'analogx3_millis',
-		'rpm',
-		'time',
-		'syncloss_count',
-		'syncloss_code',
-		'lat',
-		'lon',
-		'elev',
-		'ground_speed',
-		'afr',
-		'fuelload',
-		'spark_advance',
-		'baro',
-		'map',
-		'mat',
-		'clnt_temp',
-		'tps',
-		'batt',
-		'oil_press',
-		'ltcl_timing',
-		've1',
-		've2',
-		'egt',
-		'maf',
-		'in_temp',
-		'ax',
-		'ay',
-		'az',
-		'imu_x',
-		'imu_y',
-		'imu_z',
-		'susp_pot_1_FL',
-		'susp_pot_2_FR',
-		'susp_pot_3_RR',
-		'susp_pot_4_RL',
-		'rad_in',
-		'rad_out',
-		'amb_air_temp',
-		'brake1',
-		'brake2'
-	] as const satisfies (keyof DataLine)[];
-
-	type NumericField = (typeof NUMERIC_FIELDS)[number];
 
 	// Helper: Compute 3D time indicator plane data for restyle
 	function get3DIndicatorRestyleData(

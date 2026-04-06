@@ -126,3 +126,22 @@ export async function convertBinToWazzu(
 
 	return saveWazzuFile(telemetry, metadata);
 }
+
+
+/**
+ * Triggers a browser download for the given Blob.
+ * Creates a temporary anchor element, clicks it, then cleans up.
+ *
+ * Must only be called in a browser context — throws if `document` is unavailable.
+ */
+export function downloadBlob(blob: Blob, filename: string): void {
+	if (typeof document === 'undefined') {
+		throw new Error('downloadBlob must be called in a browser context');
+	}
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = filename;
+	a.click();
+	URL.revokeObjectURL(url);
+}

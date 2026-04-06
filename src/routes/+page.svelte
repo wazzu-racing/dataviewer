@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import type { DataLine } from '$lib/types';
 	import {
 		type LayoutNode,
 		type FloatingPaneState,
@@ -31,15 +30,14 @@
 		duplicateLayout as duplicateLayoutInStore
 	} from '$lib/stores/layoutStore';
 	import { deserializeLayout, generateShareUrl } from '$lib/shareUtils';
+	import { parseBinaryBuffer } from '$lib/dataParser';
+	import { saveWazzuFile, convertBinToWazzu, downloadBlob } from '$lib/fileFormat';
+	import { data as globalData } from '$lib/data.svelte';
+	import { dataStore } from '$lib/stores/dataStore';
+	import type { Command } from '$lib/types';
+	import { fade } from 'svelte/transition';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
-
-	// --- Add new pane at reasonable location on click ---
-	function handleAddPane(type: PaneWidgetType) {
-		// Always add a pane, preserving existing panes (even if only one exists)
-		layout = ensureIds(insertPane(layout, layout.id, type, 'right'));
-	}
-
 	import FloatingPane from '$lib/components/FloatingPane.svelte';
 	import LoadDataModal from '$lib/components/LoadDataModal.svelte';
 	import SaveLayoutModal from '$lib/components/SaveLayoutModal.svelte';
@@ -48,11 +46,20 @@
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import FullscreenOverlay from '$lib/components/FullscreenOverlay.svelte';
 
-	import { data as globalData } from '$lib/data.svelte';
-	import { dataStore } from '$lib/stores/dataStore';
-	import type { Command } from '$lib/types';
-	import { saveWazzuFile, convertBinToWazzu } from '$lib/fileFormat';
-	import { fade } from 'svelte/transition';
+	// Default dimensions for a newly popped-out floating pane
+	const DEFAULT_FLOAT_WIDTH = 480;
+	const DEFAULT_FLOAT_HEIGHT = 340;
+
+	// ---------------------------------------------------------------------------
+	// Default layout — shown the first time (no saved state)
+	// ---------------------------------------------------------------------------
+	function defaultLayout(): LayoutNode {
+		return ensureIds({ id: '', type: 'graph' });
+	}
+
+	// ---------------------------------------------------------------------------
+	// Data export / conversion handlers
+	// ---------------------------------------------------------------------------
 
 	async function handleExportWazzu() {
 		if (globalData.lines.length === 0) {
@@ -62,20 +69,15 @@
 
 		const metadata = $state.snapshot(globalData.metadata);
 		const blob = await saveWazzuFile(globalData.lines, metadata);
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`;
-		a.click();
-		URL.revokeObjectURL(url);
+		downloadBlob(blob, `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`);
 	}
 
 	async function handleConvertBin() {
 		const input = document.createElement('input');
 		input.type = 'file';
 		input.accept = '.bin';
-		input.onchange = async (e: any) => {
-			const file = e.target.files[0];
+		input.onchange = async (e: Event) => {
+			const file = (e.target as HTMLInputElement).files?.[0];
 			if (!file) return;
 
 			const buffer = await file.arrayBuffer();
@@ -93,25 +95,15 @@
 				new Date().toISOString()
 			);
 
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `${file.name.replace('.bin', '')}.wazzuracing`;
-			a.click();
-			URL.revokeObjectURL(url);
+			downloadBlob(blob, `${file.name.replace('.bin', '')}.wazzuracing`);
 		};
 		input.click();
 	}
 
-	// ---------------------------------------------------------------------------
-	// Default layout — shown the first time (no saved state)
-	// ---------------------------------------------------------------------------
-	function defaultLayout(): LayoutNode {
-		return ensureIds({ id: '', type: 'graph' });
-	}
-
-	function workingLayout(): LayoutNode {
-		return defaultLayout();
+	// --- Add new pane at reasonable location on click ---
+	function handleAddPane(type: PaneWidgetType) {
+		// Always add a pane, preserving existing panes (even if only one exists)
+		layout = ensureIds(insertPane(layout, layout.id, type, 'right'));
 	}
 
 	// ---------------------------------------------------------------------------
@@ -149,11 +141,11 @@
 			globalData.lines = [];
 
 			windowObject = window.opener;
-			window.addEventListener('message', recieveMessageFromParent);
+			window.addEventListener('message', receiveMessageFromParent);
 		}
 	}
 
-	function recieveMessageFromParent(e: MessageEvent): void {
+	function receiveMessageFromParent(e: MessageEvent): void {
 		globalData.lines = JSON.parse(e.data);
 
 		dataStore.update((old) => ({
@@ -213,8 +205,6 @@
 	let layout: LayoutNode = $state(initialLayoutData.layout);
 	let floatingPanes: FloatingPaneState[] = $state(initialLayoutData.floatingPanes);
 	let activeLayoutId: string | null = $state(initialLayoutData.layoutId);
-
-	import { parseBinaryBuffer } from '$lib/dataParser';
 
 	// Handle shared data from URL
 	$effect(() => {
@@ -316,8 +306,8 @@
 		if (updated) {
 			layout = ensureIds(updated);
 		} else {
-			// Last pane removed — transition to the working layout
-			layout = workingLayout();
+			// Last pane removed — reset to default single-pane layout
+			layout = defaultLayout();
 		}
 	}
 
@@ -329,18 +319,25 @@
 
 		// Remove from tiled tree
 		const updated = removePane(layout, nodeId);
-		layout = updated ? ensureIds(updated) : workingLayout();
+		layout = updated ? ensureIds(updated) : defaultLayout();
 
 		// Add as floating pane, centered in viewport
 		topZ = Math.min(topZ + 1, 40); // cap at 40
-		const w = 480;
-		const h = 340;
-		const x = browser ? Math.max(0, (window.innerWidth - w) / 2) : 100;
-		const y = browser ? Math.max(0, (window.innerHeight - h) / 3) : 80;
+		const x = browser ? Math.max(0, (window.innerWidth - DEFAULT_FLOAT_WIDTH) / 2) : 100;
+		const y = browser ? Math.max(0, (window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 3) : 80;
 
 		floatingPanes = [
 			...floatingPanes,
-			{ id: generateUUID(), type, x, y, width: w, height: h, zIndex: topZ, config }
+			{
+				id: generateUUID(),
+				type,
+				x,
+				y,
+				width: DEFAULT_FLOAT_WIDTH,
+				height: DEFAULT_FLOAT_HEIGHT,
+				zIndex: topZ,
+				config
+			}
 		];
 	}
 
@@ -418,7 +415,7 @@
 		} else {
 			updated = movePane(layout, sourceId, targetId, position);
 		}
-		layout = updated ? ensureIds(updated) : workingLayout();
+		layout = updated ? ensureIds(updated) : defaultLayout();
 	}
 
 	// ---------------------------------------------------------------------------

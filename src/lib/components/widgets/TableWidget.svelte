@@ -2,60 +2,11 @@
 	import { untrack } from 'svelte';
 	import { data as globalData } from '$lib/data.svelte';
 	import { timeIndexStore } from '$lib/stores/time';
-	import type { DataLine, TableConfig } from '$lib/types';
+	import { type TableConfig, NUMERIC_FIELDS, type NumericField } from '$lib/types';
 
-	// All displayable columns (everything except unixtime)
-	const ALL_COLUMNS = [
-		'write_millis',
-		'ecu_millis',
-		'gps_millis',
-		'imu_millis',
-		'accel_millis',
-		'analogx1_millis',
-		'analogx2_millis',
-		'analogx3_millis',
-		'rpm',
-		'time',
-		'syncloss_count',
-		'syncloss_code',
-		'lat',
-		'lon',
-		'elev',
-		'ground_speed',
-		'afr',
-		'fuelload',
-		'spark_advance',
-		'baro',
-		'map',
-		'mat',
-		'clnt_temp',
-		'tps',
-		'batt',
-		'oil_press',
-		'ltcl_timing',
-		've1',
-		've2',
-		'egt',
-		'maf',
-		'in_temp',
-		'ax',
-		'ay',
-		'az',
-		'imu_x',
-		'imu_y',
-		'imu_z',
-		'susp_pot_1_FL',
-		'susp_pot_2_FR',
-		'susp_pot_3_RR',
-		'susp_pot_4_RL',
-		'rad_in',
-		'rad_out',
-		'amb_air_temp',
-		'brake1',
-		'brake2'
-	] as const satisfies (keyof DataLine)[];
-
-	type Column = (typeof ALL_COLUMNS)[number];
+	// All displayable columns — imported from shared definition in types.ts
+	const ALL_COLUMNS = NUMERIC_FIELDS;
+	type Column = NumericField;
 
 	// ---------------------------------------------------------------------------
 	// Props

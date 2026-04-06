@@ -1,18 +1,7 @@
 <script lang="ts">
 	import { focus } from '$lib/actions';
-	import {
-		WIDGET_LABELS,
-		type PaneWidgetType,
-		type GraphConfig,
-		type TableConfig,
-		type GaugeConfig
-	} from '$lib/types';
-	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
-	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
-	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
-	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
-	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
-	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
+	import { WIDGET_LABELS, type PaneWidgetType } from '$lib/types';
+	import WidgetRenderer from '$lib/components/WidgetRenderer.svelte';
 
 	type Props = {
 		node: { id: string; type: PaneWidgetType; isFloating: boolean };
@@ -46,18 +35,11 @@
 		</button>
 	</div>
 	<div class="flex-1 min-h-0 overflow-hidden">
-		{#if node.type === 'graph'}
-			<GraphWidget config={config as GraphConfig | undefined} {onConfigChange} />
-		{:else if node.type === 'map'}
-			<MapWidget />
-		{:else if node.type === 'table'}
-			<TableWidget config={config as TableConfig | undefined} {onConfigChange} />
-		{:else if node.type === 'gauge'}
-			<GaugeWidget config={config as GaugeConfig | undefined} {onConfigChange} />
-		{:else if node.type === 'load-data'}
-			<LoadDataWidget onDismiss={onClose} />
-		{:else if node.type === 'metadata'}
-			<MetadataWidget {onConfigChange} />
-		{/if}
+		<WidgetRenderer
+			type={node.type}
+			config={config as Record<string, unknown> | undefined}
+			{onConfigChange}
+			onDismiss={onClose}
+		/>
 	</div>
 </div>

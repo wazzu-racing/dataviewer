@@ -1,15 +1,9 @@
 <script lang="ts">
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
-	import type { LayoutNode, DropPosition, PaneWidgetType, GraphConfig } from '$lib/types';
+	import type { LayoutNode, DropPosition, PaneWidgetType } from '$lib/types';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import DropZone from '$lib/components/DropZone.svelte';
-	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
-	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
-	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
-	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
-	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
-	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
-
+	import WidgetRenderer from '$lib/components/WidgetRenderer.svelte';
 	import { dragState } from '$lib/dragState.svelte';
 	import { WIDGET_LABELS } from '$lib/types';
 
@@ -141,35 +135,14 @@
 			style:visibility={layout.id === fullscreenPaneId ? 'hidden' : undefined}
 		>
 			<DropZone nodeId={layout.id} {onDrop} {onMove}>
-				{#if layout.type === 'graph'}
-					<GraphWidget
-						config={layout.config as GraphConfig | undefined}
-						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
-					/>
-				{:else if layout.type === 'map'}
-					<MapWidget />
-				{:else if layout.type === 'table'}
-					<TableWidget
-						config={layout.config as any}
-						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
-					/>
-				{:else if layout.type === 'gauge'}
-					<GaugeWidget
-						config={layout.config as any}
-						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
-					/>
-				{:else if layout.type === 'load-data'}
-					<LoadDataWidget onDismiss={() => onRemove(layout.id)} />
-				{:else if layout.type === 'metadata'}
-					<MetadataWidget
-						onConfigChange={(cfg) => onConfigChange(layout.id, cfg as Record<string, unknown>)}
-					/>
-				{:else}
-					<div class="flex h-full items-center justify-center text-sm text-stone-400">
-						Unknown widget type: {layout.type}
-					</div>
-				{/if}
+				<WidgetRenderer
+					type={layout.type as PaneWidgetType}
+					config={layout.config}
+					onConfigChange={(cfg) => onConfigChange(layout.id, cfg)}
+					onDismiss={() => onRemove(layout.id)}
+				/>
 			</DropZone>
 		</div>
 	</div>
 {/if}
+
