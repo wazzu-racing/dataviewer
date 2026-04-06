@@ -163,6 +163,68 @@ export type LayoutStoreData = {
 };
 
 // ---------------------------------------------------------------------------
+// Shared field lists
+// ---------------------------------------------------------------------------
+
+/**
+ * All numeric (plottable) keys from DataLine — excludes 'unixtime' (which is a Date).
+ * Exported here so that widgets (GraphWidget, TableWidget, etc.) can share a
+ * single source of truth instead of each maintaining their own copy.
+ */
+export const NUMERIC_FIELDS = [
+	'write_millis',
+	'ecu_millis',
+	'gps_millis',
+	'imu_millis',
+	'accel_millis',
+	'analogx1_millis',
+	'analogx2_millis',
+	'analogx3_millis',
+	'rpm',
+	'time',
+	'syncloss_count',
+	'syncloss_code',
+	'lat',
+	'lon',
+	'elev',
+	'ground_speed',
+	'afr',
+	'fuelload',
+	'spark_advance',
+	'baro',
+	'map',
+	'mat',
+	'clnt_temp',
+	'tps',
+	'batt',
+	'oil_press',
+	'ltcl_timing',
+	've1',
+	've2',
+	'egt',
+	'maf',
+	'in_temp',
+	'ax',
+	'ay',
+	'az',
+	'imu_x',
+	'imu_y',
+	'imu_z',
+	'susp_pot_1_FL',
+	'susp_pot_2_FR',
+	'susp_pot_3_RR',
+	'susp_pot_4_RL',
+	'rad_in',
+	'rad_out',
+	'amb_air_temp',
+	'brake1',
+	'brake2'
+] as const satisfies (keyof DataLine)[];
+
+/** Union of all numeric DataLine field names */
+export type NumericField = (typeof NUMERIC_FIELDS)[number];
+
+// ---------------------------------------------------------------------------
 // File format types
 // ---------------------------------------------------------------------------
 

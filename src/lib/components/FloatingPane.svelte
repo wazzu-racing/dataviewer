@@ -1,17 +1,7 @@
 <script lang="ts">
 	import { draggable } from '@neodrag/svelte';
-	import {
-		WIDGET_LABELS,
-		type FloatingPaneState,
-		type PaneWidgetType,
-		type GraphConfig
-	} from '$lib/types';
-	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
-	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
-	import TableWidget from '$lib/components/widgets/TableWidget.svelte';
-	import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
-	import LoadDataWidget from '$lib/components/widgets/LoadDataWidget.svelte';
-	import MetadataWidget from '$lib/components/widgets/MetadataWidget.svelte';
+	import { WIDGET_LABELS, type FloatingPaneState, type PaneWidgetType } from '$lib/types';
+	import WidgetRenderer from '$lib/components/WidgetRenderer.svelte';
 
 	type Props = {
 		pane: FloatingPaneState;
@@ -85,29 +75,10 @@
 
 	<!-- Widget content -->
 	<div class="min-h-0 flex-1 overflow-hidden">
-		{#if pane.type === 'graph'}
-			<GraphWidget
-				config={pane.config as GraphConfig | undefined}
-				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
-			/>
-		{:else if pane.type === 'map'}
-			<MapWidget />
-		{:else if pane.type === 'table'}
-			<TableWidget
-				config={pane.config as any}
-				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
-			/>
-		{:else if pane.type === 'gauge'}
-			<GaugeWidget
-				config={pane.config as any}
-				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
-			/>
-		{:else if pane.type === 'load-data'}
-			<LoadDataWidget />
-		{:else if pane.type === 'metadata'}
-			<MetadataWidget
-				onConfigChange={(cfg) => onConfigChange(pane.id, cfg as Record<string, unknown>)}
-			/>
-		{/if}
+		<WidgetRenderer
+			type={pane.type as PaneWidgetType}
+			config={pane.config}
+			onConfigChange={(cfg) => onConfigChange(pane.id, cfg)}
+		/>
 	</div>
 </div>
