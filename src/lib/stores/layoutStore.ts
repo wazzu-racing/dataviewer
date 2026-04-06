@@ -49,7 +49,7 @@ function getDefaultLayout(): LayoutNode {
 
 /**
  * Appends a disambiguating counter suffix to `name` until it is unique among
- * `existingNames`, skipping the entry with `excludeId` if provided.
+ * `existingLayouts[*].name`, skipping the entry with `excludeId` if provided.
  */
 function ensureUniqueName(
 	name: string,
