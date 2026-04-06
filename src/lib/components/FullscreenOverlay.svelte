@@ -44,15 +44,9 @@
 		{:else if node.type === 'map'}
 			<MapWidget />
 		{:else if node.type === 'table'}
-			<TableWidget
-				config={config as TableConfig | undefined}
-				onConfigChange={(c) => onConfigChange(c as any)}
-			/>
+			<TableWidget config={config as TableConfig | undefined} {onConfigChange} />
 		{:else if node.type === 'gauge'}
-			<GaugeWidget
-				config={config as GaugeConfig | undefined}
-				onConfigChange={(c) => onConfigChange(c as any)}
-			/>
+			<GaugeWidget config={config as GaugeConfig | undefined} {onConfigChange} />
 		{:else if node.type === 'load-data'}
 			<LoadDataWidget onDismiss={onClose} />
 		{:else if node.type === 'metadata'}
