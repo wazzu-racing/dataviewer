@@ -2,7 +2,11 @@
 	import { data } from '$lib/data.svelte';
 	import { saveWazzuFile } from '$lib/fileFormat';
 
-	let { onConfigChange }: { onConfigChange?: (config: Record<string, unknown>) => void } = $props();
+	let { onConfigChange }: { onConfigChange?: (config: Record<string, any>) => void } = $props();
+
+	$effect(() => {
+		onConfigChange?.(data.metadata);
+	});
 
 	async function handleExport() {
 		if (data.lines.length === 0) {
