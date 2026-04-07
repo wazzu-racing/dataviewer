@@ -19,43 +19,26 @@
 </script>
 
 {#if type === 'graph'}
-	<div data-testid="widget-renderer-graph">
-		<GraphWidget
-			config={config as GraphConfig | undefined}
-			onConfigChange={onConfigChange as ((cfg: GraphConfig) => void) | undefined}
-		/>
-	</div>
+	<GraphWidget
+		config={config as GraphConfig | undefined}
+		onConfigChange={onConfigChange as ((cfg: GraphConfig) => void) | undefined}
+	/>
 {:else if type === 'map'}
-	<div data-testid="widget-renderer-map">
-		<MapWidget />
-	</div>
+	<MapWidget />
 {:else if type === 'table'}
-	<div data-testid="widget-renderer-table">
-		<TableWidget
-			config={config as TableConfig | undefined}
-			onConfigChange={onConfigChange as ((cfg: TableConfig) => void) | undefined}
-		/>
-	</div>
+	<TableWidget
+		config={config as TableConfig | undefined}
+		onConfigChange={onConfigChange as ((cfg: TableConfig) => void) | undefined}
+	/>
 {:else if type === 'gauge'}
-	<div data-testid="widget-renderer-gauge">
-		<GaugeWidget
-			config={config as GaugeConfig | undefined}
-			onConfigChange={onConfigChange as ((cfg: GaugeConfig) => void) | undefined}
-		/>
-	</div>
+	<GaugeWidget
+		config={config as GaugeConfig | undefined}
+		onConfigChange={onConfigChange as ((cfg: GaugeConfig) => void) | undefined}
+	/>
 {:else if type === 'load-data'}
-	<div data-testid="widget-renderer-load-data">
-		<LoadDataWidget onDismiss={onDismiss} />
-	</div>
+	<LoadDataWidget {onDismiss} />
 {:else if type === 'metadata'}
-	<div data-testid="widget-renderer-metadata">
-		<MetadataWidget {onConfigChange} />
-	</div>
+	<MetadataWidget {onConfigChange} />
 {:else}
-	<div
-		data-testid="widget-renderer-unknown"
-		class="flex h-full items-center justify-center text-sm text-stone-400"
-	>
-		Unknown widget type: {type}
-	</div>
+	Unknown widget type: {type}
 {/if}
