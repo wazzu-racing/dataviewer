@@ -14,11 +14,29 @@
 		$dataStore.telemetry.length > 0 && $dataStore.telemetry.some((l) => l.lat !== 0 && l.lon !== 0)
 	);
 
-	// Helper: Utility to determine if we're in dark mode
-	function isDarkMode() {
-		if (!browser) return false;
-		return window.matchMedia('(prefers-color-scheme: dark)').matches;
-	}
+	let isDarkTheme = $state(false);
+
+	$effect(() => {
+		if (!browser) return;
+
+		const readTheme = () => document.documentElement.classList.contains('dark');
+		const updateTheme = (detail?: 'light' | 'dark') => {
+			isDarkTheme = detail ? detail === 'dark' : readTheme();
+		};
+
+		updateTheme();
+
+		const handleThemeChange = (event: Event) => {
+			const detail = (event as CustomEvent<'light' | 'dark'>).detail;
+			updateTheme(detail);
+		};
+
+		window.addEventListener('themechange', handleThemeChange as EventListener);
+
+		return () => {
+			window.removeEventListener('themechange', handleThemeChange as EventListener);
+		};
+	});
 
 	// Theme color constants (match design tokens and branding)
 	const BRAND_ACCENT = '#a60f2d';
@@ -30,6 +48,7 @@
 	const CARD_BG_DARK = '#171717';
 
 	$effect(() => {
+		const darkTheme = isDarkTheme;
 		if (!browser || !mapContainer || !hasData) return;
 
 		let cancelled = false;
@@ -67,12 +86,11 @@
 			if (trackLine) {
 				leafletMap.removeLayer(trackLine);
 			}
-			const dark = isDarkMode();
 			const trackColor = BRAND_ACCENT;
 			trackLine = L.polyline(coords, { color: trackColor, weight: 3 }).addTo(leafletMap);
 
 			// Start/End markers
-			const startColor = dark ? GREEN_DARK : GREEN_LIGHT;
+			const startColor = darkTheme ? GREEN_DARK : GREEN_LIGHT;
 			L.circleMarker(coords[0], {
 				radius: 7,
 				color: startColor,
@@ -82,7 +100,7 @@
 				.bindTooltip('Start')
 				.addTo(leafletMap);
 
-			const endColor = dark ? RED_DARK : RED_LIGHT;
+			const endColor = darkTheme ? RED_DARK : RED_LIGHT;
 			L.circleMarker(coords[coords.length - 1], {
 				radius: 7,
 				color: endColor,
@@ -110,7 +128,7 @@
 	$effect(() => {
 		if (!browser || !leafletMap || !hasData) {
 			if (timeMarker) {
-				leafletMap.removeLayer(timeMarker);
+				leafletMap?.removeLayer(timeMarker);
 				timeMarker = null;
 			}
 			return;

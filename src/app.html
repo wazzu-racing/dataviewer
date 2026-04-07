@@ -3,6 +3,26 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script>
+			(() => {
+				try {
+					const root = document.documentElement;
+					const stored = localStorage.getItem('theme-preference');
+					const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+					const resolved =
+						stored === 'light' || stored === 'dark' ? stored : systemDark ? 'dark' : 'light';
+					const isDark = resolved === 'dark';
+					root.classList.toggle('dark', isDark);
+					root.dataset.theme = resolved;
+					if (document.body) {
+						document.body.classList.toggle('dark', isDark);
+						document.body.dataset.theme = resolved;
+					}
+				} catch (err) {
+					console.error('Theme bootstrap failed', err);
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

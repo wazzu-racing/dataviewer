@@ -16,7 +16,7 @@
  * Usage: Import this automatically via @tailwindcss/vite plugin in vite.config.ts
  */
 module.exports = {
-	darkMode: 'media', // enables dark mode based on system preference
+	darkMode: 'class', // enable runtime theme switching via .dark class
 	content: ['./src/**/*.{html,js,svelte,ts}', './src/app.html'],
 	theme: {
 		extend: {

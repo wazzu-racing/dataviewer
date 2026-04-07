@@ -559,18 +559,22 @@
 	$effect(() => {
 		if (!browser) return;
 
-		// Check initial state
-		isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-		// Listen for theme changes
-		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-		const handler = (e: MediaQueryListEvent) => {
-			isDarkMode = e.matches;
+		const readTheme = () => document.documentElement.classList.contains('dark');
+		const updateTheme = (detail?: 'light' | 'dark') => {
+			isDarkMode = detail ? detail === 'dark' : readTheme();
 		};
-		mediaQuery.addEventListener('change', handler);
+
+		updateTheme();
+
+		const handleThemeEvent = (event: Event) => {
+			const detail = (event as CustomEvent<'light' | 'dark'>).detail;
+			updateTheme(detail);
+		};
+
+		window.addEventListener('themechange', handleThemeEvent as EventListener);
 
 		return () => {
-			mediaQuery.removeEventListener('change', handler);
+			window.removeEventListener('themechange', handleThemeEvent as EventListener);
 		};
 	});
 

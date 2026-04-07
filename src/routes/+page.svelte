@@ -596,6 +596,83 @@
 		}
 	];
 
+	type ThemePreference = 'system' | 'light' | 'dark';
+
+	const THEME_CHANGE_EVENT = 'themechange';
+
+	let themePreference: ThemePreference = $state('system');
+
+	function dispatchThemeChange(mode: 'light' | 'dark') {
+		if (!browser) return;
+		window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: mode }));
+	}
+
+	function resolveTheme(preference: ThemePreference): 'light' | 'dark' {
+		if (preference === 'system') {
+			if (!browser) return 'light';
+			return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+		}
+		return preference;
+	}
+
+	function applyTheme(preference: ThemePreference, persist = true) {
+		themePreference = preference;
+		if (!browser) return;
+
+		const resolved = resolveTheme(preference);
+		const isDark = resolved === 'dark';
+		document.documentElement.classList.toggle('dark', isDark);
+		document.body.classList.toggle('dark', isDark);
+		document.documentElement.dataset.theme = resolved;
+		document.body.dataset.theme = resolved;
+		dispatchThemeChange(resolved);
+
+		if (!persist) return;
+		if (preference === 'system') {
+			localStorage.removeItem('theme-preference');
+		} else {
+			localStorage.setItem('theme-preference', preference);
+		}
+	}
+
+	$effect(() => {
+		if (!browser) {
+			return;
+		}
+
+		const storedPreference = localStorage.getItem('theme-preference');
+		const initialPreference: ThemePreference =
+			storedPreference === 'light' || storedPreference === 'dark'
+				? (storedPreference as ThemePreference)
+				: 'system';
+		applyTheme(initialPreference, false);
+
+		const media = window.matchMedia('(prefers-color-scheme: dark)');
+		const handleMediaChange = () => {
+			if (themePreference === 'system') {
+				applyTheme('system', false);
+			}
+		};
+		media.addEventListener('change', handleMediaChange);
+
+		return () => {
+			media.removeEventListener('change', handleMediaChange);
+		};
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const handleStorage = (event: StorageEvent) => {
+			if (event.key !== 'theme-preference') return;
+			const value = event.newValue;
+			const preference: ThemePreference =
+				value === 'light' || value === 'dark' ? (value as ThemePreference) : 'system';
+			applyTheme(preference, false);
+		};
+		window.addEventListener('storage', handleStorage);
+		return () => window.removeEventListener('storage', handleStorage);
+	});
+
 	let commands = $derived.by(() => {
 		const layoutCommands: Command[] = layouts.map((l) => ({
 			id: `load-layout-${l.id}`,
@@ -608,12 +685,17 @@
 			{
 				id: 'theme-light',
 				label: 'Light',
-				action: () => document.documentElement.classList.remove('dark')
+				action: () => applyTheme('light')
 			},
 			{
 				id: 'theme-dark',
 				label: 'Dark',
-				action: () => document.documentElement.classList.add('dark')
+				action: () => applyTheme('dark')
+			},
+			{
+				id: 'theme-system',
+				label: 'System Default',
+				action: () => applyTheme('system')
 			}
 		];
 
