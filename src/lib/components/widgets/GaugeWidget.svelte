@@ -121,6 +121,11 @@
 	);
 	const minVal = $derived(allValues.length > 0 ? Math.min(...allValues) : 0);
 	const maxVal = $derived(allValues.length > 0 ? Math.max(...allValues) : 1);
+	const avgVal = $derived(
+		allValues.length > 0
+			? allValues.reduce((sum, value) => sum + value, 0) / allValues.length
+			: null
+	);
 	const barPct = $derived(
 		currentValue !== null && maxVal > minVal
 			? Math.max(0, Math.min(1, (currentValue - minVal) / (maxVal - minVal)))
@@ -160,6 +165,10 @@
 		const sweepFlag = 1;
 		const largeArcFlag = pct > 0.5 ? 1 : 0;
 		return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${R} ${R} 0 ${largeArcFlag} ${sweepFlag} ${x2.toFixed(3)} ${y2.toFixed(3)}`;
+	}
+
+	function formatNumber(value: number | null, decimals = 1): string {
+		return typeof value === 'number' && isFinite(value) ? value.toFixed(decimals) : '—';
 	}
 
 	// Track arc: full 180° sweep
@@ -278,5 +287,34 @@
 				{typeof maxVal === 'number' && isFinite(maxVal) ? maxVal.toFixed(1) : '—'}
 			</text>
 		</svg>
+
+		<div
+			class="w-full max-w-xs grid grid-cols-3 gap-2 text-center text-[10px] font-semibold text-neutral-500 dark:text-neutral-400"
+		>
+			<div class="rounded-md bg-neutral-50 dark:bg-neutral-800/40 px-2 py-1">
+				<div class="uppercase tracking-wide text-[9px] text-neutral-400 dark:text-neutral-500">
+					Min
+				</div>
+				<div class="text-base text-primary-900 dark:text-neutral-100 font-mono">
+					{formatNumber(minVal)}
+				</div>
+			</div>
+			<div class="rounded-md bg-neutral-50 dark:bg-neutral-800/40 px-2 py-1">
+				<div class="uppercase tracking-wide text-[9px] text-neutral-400 dark:text-neutral-500">
+					Max
+				</div>
+				<div class="text-base text-primary-900 dark:text-neutral-100 font-mono">
+					{formatNumber(maxVal)}
+				</div>
+			</div>
+			<div class="rounded-md bg-neutral-50 dark:bg-neutral-800/40 px-2 py-1">
+				<div class="uppercase tracking-wide text-[9px] text-neutral-400 dark:text-neutral-500">
+					Avg
+				</div>
+				<div class="text-base text-primary-900 dark:text-neutral-100 font-mono">
+					{formatNumber(avgVal)}
+				</div>
+			</div>
+		</div>
 	{/if}
 </div>
