@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import TableWidget from '$lib/components/widgets/TableWidget.svelte';
 import { data as globalData } from '$lib/data.svelte';
-import type { DataLine, TableConfig } from '$lib/types';
+import type { DataLine, TableConfig, NumericField } from '$lib/types';
+import { formatFieldValue, getFieldLabelWithUnit } from '$lib/fieldMetadata';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,10 +93,11 @@ describe('TableWidget', () => {
 
 	it('renders default 6 column headers', () => {
 		globalData.lines = [makeDataLine()];
-		const { container } = render(TableWidget);
-		// Default columns: time, rpm, ground_speed, tps, afr, batt
-		const headers = container.querySelectorAll('div.font-semibold.text-stone-700');
-		expect(headers.length).toBe(6);
+		const { getByText } = render(TableWidget);
+		const defaultFields: NumericField[] = ['time', 'rpm', 'ground_speed', 'tps', 'afr', 'batt'];
+		defaultFields.forEach((field) => {
+			expect(getByText(getFieldLabelWithUnit(field))).toBeTruthy();
+		});
 	});
 
 	it('renders a "Columns" picker button', () => {
@@ -121,17 +123,15 @@ describe('TableWidget', () => {
 
 	it('renders data rows when data is loaded', () => {
 		globalData.lines = [makeDataLine({ time: 42, rpm: 3000 })];
-		const { container } = render(TableWidget);
-		// At least one data row should be present (excluding header)
-		const rows = container.querySelectorAll('.border-b.border-stone-100');
-		expect(rows.length).toBeGreaterThan(0);
+		const { getByText } = render(TableWidget);
+		expect(getByText(formatFieldValue('time', 42, { includeUnit: true }))).toBeTruthy();
+		expect(getByText(formatFieldValue('rpm', 3000, { includeUnit: true }))).toBeTruthy();
 	});
 
-	it('formats numbers to 3 decimal places', () => {
-		globalData.lines = [makeDataLine({ time: 1.23456 })];
+	it('formats numeric cells using field metadata precision and units', () => {
+		globalData.lines = [makeDataLine({ afr: 14.6789 })];
 		const { getByText } = render(TableWidget);
-		// 'time' is a default column
-		expect(getByText('1.235')).toBeTruthy();
+		expect(getByText(formatFieldValue('afr', 14.6789, { includeUnit: true }))).toBeTruthy();
 	});
 
 	it('toggles a column off when its checkbox is unchecked', async () => {
@@ -148,7 +148,7 @@ describe('TableWidget', () => {
 		// Find the one for 'time' — it's inside a label containing 'time'
 		let timeCheckbox: HTMLInputElement | undefined;
 		checkboxes.forEach((cb) => {
-			if (cb.closest('label')?.textContent?.includes('time')) {
+			if (cb.closest('label')?.textContent?.includes(getFieldLabelWithUnit('time'))) {
 				timeCheckbox = cb;
 			}
 		});
@@ -158,9 +158,11 @@ describe('TableWidget', () => {
 		await fireEvent.click(timeCheckbox!);
 
 		// 'time' header should no longer appear
-		const headers = container.querySelectorAll('div.font-semibold.text-stone-700');
-		const headerTexts = Array.from(headers).map((h) => h.textContent?.trim());
-		expect(headerTexts).not.toContain('time');
+		const headerSection = container.querySelector('.shrink-0.border-b');
+		const headerTexts = Array.from(headerSection?.querySelectorAll('.w-28') ?? []).map((h) =>
+			h.textContent?.trim()
+		);
+		expect(headerTexts).not.toContain(getFieldLabelWithUnit('time'));
 	});
 
 	// ---------------------------------------------------------------------------
@@ -170,14 +172,12 @@ describe('TableWidget', () => {
 	it('seeds visibleColumns from config.visibleColumns prop', () => {
 		const config: TableConfig = { visibleColumns: ['rpm', 'tps'] };
 		globalData.lines = [makeDataLine({ rpm: 3000, tps: 50 })];
-		const { container } = render(TableWidget, { props: { config } });
-		const headers = container.querySelectorAll('div.font-semibold.text-stone-700');
-		const headerTexts = Array.from(headers).map((h) => h.textContent?.trim());
-		expect(headerTexts).toContain('rpm');
-		expect(headerTexts).toContain('tps');
+		const { getByText, queryByText } = render(TableWidget, { props: { config } });
+		expect(getByText(getFieldLabelWithUnit('rpm'))).toBeTruthy();
+		expect(getByText(getFieldLabelWithUnit('tps'))).toBeTruthy();
 		// Should not contain default columns that weren't in config
-		expect(headerTexts).not.toContain('afr');
-		expect(headerTexts).not.toContain('batt');
+		expect(queryByText(getFieldLabelWithUnit('afr'))).toBeNull();
+		expect(queryByText(getFieldLabelWithUnit('batt'))).toBeNull();
 	});
 
 	it('does not fire onConfigChange on initial mount', async () => {
@@ -199,7 +199,7 @@ describe('TableWidget', () => {
 		) as NodeListOf<HTMLInputElement>;
 		let afrCheckbox: HTMLInputElement | undefined;
 		checkboxes.forEach((cb) => {
-			if (cb.closest('label')?.textContent?.trim() === 'afr') {
+			if (cb.closest('label')?.textContent?.trim() === getFieldLabelWithUnit('afr')) {
 				afrCheckbox = cb;
 			}
 		});

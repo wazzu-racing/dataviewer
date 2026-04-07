@@ -3,6 +3,7 @@
 	import { data as globalData } from '$lib/data.svelte';
 	import { timeIndexStore } from '$lib/stores/time';
 	import { type TableConfig, NUMERIC_FIELDS, type NumericField } from '$lib/types';
+	import { formatFieldValue, getFieldLabelWithUnit } from '$lib/fieldMetadata';
 
 	// All displayable columns — imported from shared definition in types.ts
 	const ALL_COLUMNS = NUMERIC_FIELDS;
@@ -72,6 +73,7 @@
 	// Scroll nearest row into view when changed and if visible
 	$effect(() => {
 		if (nearestRowIdx === null || !scrollContainer || globalData.lines.length === 0) return;
+		if (typeof scrollContainer.scrollTo !== 'function') return;
 		// If nearestRowIdx is currently visible, scroll to it
 		const rowTop = nearestRowIdx * ROW_HEIGHT;
 		const rowBottom = rowTop + ROW_HEIGHT;
@@ -104,9 +106,11 @@
 	const visibleRows = $derived(lines.slice(startIdx, endIdx));
 	const offsetY = $derived(startIdx * ROW_HEIGHT);
 
-	function fmt(val: unknown): string {
-		if (typeof val === 'number') return val.toFixed(3);
-		return String(val);
+	function fmt(field: Column, val: unknown): string {
+		if (typeof val === 'number') {
+			return formatFieldValue(field, val, { includeUnit: true });
+		}
+		return typeof val === 'undefined' || val === null ? '—' : String(val);
 	}
 
 	function toggleColumn(col: Column) {
@@ -150,7 +154,9 @@
 								onchange={() => toggleColumn(col)}
 								class="accent-primary focus-visible:ring-2 focus-visible:ring-primary"
 							/>
-							<span class="text-xs text-primary-900 dark:text-neutral-200">{col}</span>
+							<span class="text-xs text-primary-900 dark:text-neutral-200">
+								{getFieldLabelWithUnit(col)}
+							</span>
 						</label>
 					{/each}
 				</div>
@@ -175,7 +181,7 @@
 				</div>
 				{#each visibleColumns as col (col)}
 					<div class="w-28 shrink-0 px-3 py-2 font-bold text-primary-800 dark:text-neutral-200">
-						{col}
+						{getFieldLabelWithUnit(col)}
 					</div>
 				{/each}
 			</div>
@@ -207,7 +213,7 @@
 								<div
 									class="w-28 shrink-0 overflow-hidden px-3 py-2 text-neutral-900 dark:text-neutral-200 group-hover:text-primary-800 dark:group-hover:text-neutral-100"
 								>
-									{fmt(row[col])}
+									{fmt(col, row[col])}
 								</div>
 							{/each}
 						</div>

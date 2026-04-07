@@ -1,75 +1,19 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { dataStore } from '$lib/stores/dataStore';
-	import type { DataLine, GaugeConfig } from '$lib/types';
+	import type { GaugeConfig } from '$lib/types';
+	import { NUMERIC_FIELDS, type NumericField } from '$lib/types';
+	import {
+		formatFieldValue,
+		formatLabelWithUnit,
+		getFieldLabel,
+		getFieldUnit
+	} from '$lib/fieldMetadata';
 	import { timeIndexStore } from '$lib/stores/time';
 
-	const NUMERIC_FIELDS = [
-		'rpm',
-		'ground_speed',
-		'tps',
-		'afr',
-		'batt',
-		'oil_press',
-		'clnt_temp',
-		'mat',
-		'egt',
-		'rad_in',
-		'rad_out',
-		'amb_air_temp',
-		'brake1',
-		'brake2',
-		'baro',
-		'map',
-		'maf',
-		'in_temp',
-		'ax',
-		'ay',
-		'az',
-		'imu_x',
-		'imu_y',
-		'imu_z',
-		'susp_pot_1_FL',
-		'susp_pot_2_FR',
-		'susp_pot_3_RR',
-		'susp_pot_4_RL',
-		'lat',
-		'lon',
-		'elev',
-		'spark_advance',
-		'fuelload',
-		'time',
-		'write_millis'
-	] as const satisfies (keyof DataLine)[];
-
-	type NumericField = (typeof NUMERIC_FIELDS)[number];
-
-	const FIELD_UNITS: Partial<Record<NumericField, string>> = {
-		rpm: 'RPM',
-		ground_speed: 'mph',
-		tps: '%',
-		afr: ':1',
-		batt: 'V',
-		oil_press: 'kPa',
-		clnt_temp: '°F',
-		mat: '°F',
-		egt: '°F',
-		rad_in: '°F',
-		rad_out: '°F',
-		amb_air_temp: '°F',
-		brake1: 'psi',
-		brake2: 'psi',
-		baro: 'kPa',
-		map: 'kPa',
-		lat: '°',
-		lon: '°',
-		elev: 'm',
-		spark_advance: '°'
-	};
-
-	function prettyLabel(field: string): string {
-		return field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-	}
+	const GAUGE_FIELDS = NUMERIC_FIELDS.filter(
+		(field) => field !== 'syncloss_count'
+	) as NumericField[];
 
 	// ---------------------------------------------------------------------------
 	// Props
@@ -88,18 +32,9 @@
 	// ---------------------------------------------------------------------------
 	let selectedField: NumericField = $state(_seedField);
 
-	// ---------------------------------------------------------------------------
-	// Config persistence — same mount-guard pattern as GraphWidget
-	// ---------------------------------------------------------------------------
-	let _configMounted = false;
-	$effect(() => {
-		const cfg: GaugeConfig = { field: selectedField };
-		if (!_configMounted) {
-			_configMounted = true;
-			return;
-		}
-		onConfigChange?.(cfg);
-	});
+	function persistConfig() {
+		onConfigChange?.({ field: selectedField });
+	}
 
 	// ---------------------------------------------------------------------------
 	// Derived values
@@ -108,7 +43,8 @@
 	const currentLine = $derived($timeIndexStore.currentLine);
 	const currentValue = $derived(currentLine ? (currentLine[selectedField] as number) : null);
 
-	const unit = $derived(FIELD_UNITS[selectedField] ?? '');
+	const currentLabel = $derived(getFieldLabel(selectedField));
+	const unit = $derived(getFieldUnit(selectedField) ?? '');
 
 	const allValues = $derived(
 		$dataStore.telemetry.length > 0
@@ -167,8 +103,8 @@
 		return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${R} ${R} 0 ${largeArcFlag} ${sweepFlag} ${x2.toFixed(3)} ${y2.toFixed(3)}`;
 	}
 
-	function formatNumber(value: number | null, decimals = 1): string {
-		return typeof value === 'number' && isFinite(value) ? value.toFixed(decimals) : '—';
+	function formatStat(value: number | null): string {
+		return formatFieldValue(selectedField, value, { includeUnit: true });
 	}
 
 	// Track arc: full 180° sweep
@@ -196,10 +132,11 @@
 	<!-- Field selector -->
 	<select
 		bind:value={selectedField}
+		onchange={persistConfig}
 		class="w-full max-w-xs rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
 	>
-		{#each NUMERIC_FIELDS as f (f)}
-			<option value={f}>{prettyLabel(f)}</option>
+		{#each GAUGE_FIELDS as f (f)}
+			<option value={f}>{formatLabelWithUnit(f)}</option>
 		{/each}
 	</select>
 
@@ -210,7 +147,7 @@
 		<svg
 			viewBox="0 0 210 120"
 			class="w-full max-w-xs"
-			aria-label="{prettyLabel(selectedField)} gauge"
+			aria-label="{formatLabelWithUnit(selectedField)} gauge"
 			role="img"
 		>
 			<!-- Background track arc -->
@@ -235,7 +172,7 @@
 				class="fill-primary-950 dark:fill-neutral-100"
 				font-family="monospace"
 			>
-				{typeof currentValue === 'number' && isFinite(currentValue) ? currentValue.toFixed(1) : '—'}
+				{formatFieldValue(selectedField, currentValue ?? undefined)}
 			</text>
 			<!-- Unit label -->
 			{#if unit}
@@ -262,7 +199,7 @@
 				fill="#78716c"
 				class="dark:fill-neutral-400"
 			>
-				{prettyLabel(selectedField)}
+				{currentLabel}
 			</text>
 			<!-- Min label (left end of arc) -->
 			<text
@@ -273,7 +210,7 @@
 				fill="#a8a29e"
 				class="dark:fill-neutral-400"
 			>
-				{typeof minVal === 'number' && isFinite(minVal) ? minVal.toFixed(1) : '—'}
+				{formatStat(minVal)}
 			</text>
 			<!-- Max label (right end of arc) -->
 			<text
@@ -284,7 +221,7 @@
 				fill="#a8a29e"
 				class="dark:fill-neutral-400"
 			>
-				{typeof maxVal === 'number' && isFinite(maxVal) ? maxVal.toFixed(1) : '—'}
+				{formatStat(maxVal)}
 			</text>
 		</svg>
 
@@ -296,7 +233,7 @@
 					Min
 				</div>
 				<div class="text-base text-primary-900 dark:text-neutral-100 font-mono">
-					{formatNumber(minVal)}
+					{formatStat(minVal)}
 				</div>
 			</div>
 			<div class="rounded-md bg-neutral-50 dark:bg-neutral-800/40 px-2 py-1">
@@ -304,7 +241,7 @@
 					Max
 				</div>
 				<div class="text-base text-primary-900 dark:text-neutral-100 font-mono">
-					{formatNumber(maxVal)}
+					{formatStat(maxVal)}
 				</div>
 			</div>
 			<div class="rounded-md bg-neutral-50 dark:bg-neutral-800/40 px-2 py-1">
@@ -312,7 +249,7 @@
 					Avg
 				</div>
 				<div class="text-base text-primary-900 dark:text-neutral-100 font-mono">
-					{formatNumber(avgVal)}
+					{formatStat(avgVal)}
 				</div>
 			</div>
 		</div>

@@ -3,6 +3,24 @@ import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import GaugeWidget from '$lib/components/widgets/GaugeWidget.svelte';
 import { data as globalData } from '$lib/data.svelte';
 import type { DataLine, GaugeConfig } from '$lib/types';
+import {
+	formatFieldValue,
+	getFieldLabel,
+	getFieldLabelWithUnit,
+	getFieldUnit
+} from '$lib/fieldMetadata';
+import { dataStore, type DataState } from '$lib/stores/dataStore';
+import { setIndex } from '$lib/stores/time';
+
+function syncTelemetry(lines: DataLine[]) {
+	globalData.lines = lines;
+	const nextState: DataState = {
+		telemetry: lines,
+		widgets: []
+	};
+	dataStore.set(nextState);
+	setIndex(lines.length > 0 ? lines.length - 1 : 0);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,11 +85,11 @@ function makeDataLine(overrides: Partial<DataLine> = {}): DataLine {
 // ---------------------------------------------------------------------------
 describe('GaugeWidget', () => {
 	beforeEach(() => {
-		globalData.lines = [];
+		syncTelemetry([]);
 	});
 
 	afterEach(() => {
-		globalData.lines = [];
+		syncTelemetry([]);
 	});
 
 	it('shows "No data loaded" when globalData is empty', () => {
@@ -93,28 +111,26 @@ describe('GaugeWidget', () => {
 	});
 
 	it('displays the last data point value when data is loaded', async () => {
-		globalData.lines = [makeDataLine({ rpm: 3500 }), makeDataLine({ rpm: 7200 })];
+		syncTelemetry([makeDataLine({ rpm: 3500 }), makeDataLine({ rpm: 7200 })]);
 
 		const { container } = render(GaugeWidget);
 		// Default field is 'rpm'; last value is 7200
 		const select = container.querySelector('select')!;
 		// Ensure 'rpm' is selected
 		expect((select as HTMLSelectElement).value).toBe('rpm');
-		// The large value display is in the SVG text element
-		const svgTexts = container.querySelectorAll('svg text');
-		const valueText = Array.from(svgTexts).find((t) => t.textContent?.trim() === '7200.0');
-		expect(valueText).toBeTruthy();
+		const valueNode = container.querySelector('svg text[font-size="26"]');
+		expect(valueNode?.textContent?.trim()).toBe(formatFieldValue('rpm', 7200));
 	});
 
 	it('displays the unit label for the selected field', () => {
-		globalData.lines = [makeDataLine({ rpm: 1000 })];
+		syncTelemetry([makeDataLine({ rpm: 1000 })]);
 		const { getByText } = render(GaugeWidget);
-		expect(getByText('RPM')).toBeTruthy();
+		expect(getByText(getFieldUnit('rpm')!)).toBeTruthy();
 	});
 
 	it('renders an SVG arc gauge when data is loaded', () => {
 		// Two rows with different rpm values so barPct > 0 and the fill arc is rendered
-		globalData.lines = [makeDataLine({ rpm: 0 }), makeDataLine({ rpm: 5000 })];
+		syncTelemetry([makeDataLine({ rpm: 0 }), makeDataLine({ rpm: 5000 })]);
 		const { container } = render(GaugeWidget);
 		const svg = container.querySelector('svg');
 		expect(svg).toBeTruthy();
@@ -124,27 +140,25 @@ describe('GaugeWidget', () => {
 	});
 
 	it('shows min value and max value as SVG text labels', () => {
-		globalData.lines = [makeDataLine({ rpm: 0 }), makeDataLine({ rpm: 8000 })];
+		syncTelemetry([makeDataLine({ rpm: 100 }), makeDataLine({ rpm: 8000 })]);
 		const { container } = render(GaugeWidget);
-		const svgTexts = Array.from(container.querySelectorAll('svg text')).map((t) =>
-			t.textContent?.trim()
-		);
-		expect(svgTexts).toContain('0.0');
-		expect(svgTexts).toContain('8000.0');
+		const minNode = container.querySelector('text[x="14"][y="118"]');
+		const maxNode = container.querySelector('text[x="186"][y="118"]');
+		expect(minNode?.textContent?.trim()).toBe(formatFieldValue('rpm', 100, { includeUnit: true }));
+		expect(maxNode?.textContent?.trim()).toBe(formatFieldValue('rpm', 8000, { includeUnit: true }));
 	});
 
 	it('renders the field label in the SVG', () => {
-		globalData.lines = [makeDataLine({ rpm: 4000 })];
+		syncTelemetry([makeDataLine({ rpm: 4000 })]);
 		const { container } = render(GaugeWidget);
-		// prettyLabel('rpm') → 'Rpm'
 		const svgTexts = Array.from(container.querySelectorAll('svg text')).map((t) =>
 			t.textContent?.trim()
 		);
-		expect(svgTexts).toContain('Rpm');
+		expect(svgTexts).toContain(getFieldLabel('rpm'));
 	});
 
 	it('updates displayed value when a different field is selected', async () => {
-		globalData.lines = [makeDataLine({ rpm: 4000, tps: 75 })];
+		syncTelemetry([makeDataLine({ rpm: 4000, tps: 75 })]);
 		const { container } = render(GaugeWidget);
 
 		const select = container.querySelector('select') as HTMLSelectElement;
@@ -153,7 +167,7 @@ describe('GaugeWidget', () => {
 		const svgTexts = Array.from(container.querySelectorAll('svg text')).map((t) =>
 			t.textContent?.trim()
 		);
-		expect(svgTexts).toContain('75.0');
+		expect(svgTexts).toContain(formatFieldValue('tps', 75));
 	});
 
 	// ---------------------------------------------------------------------------

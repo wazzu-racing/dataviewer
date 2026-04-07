@@ -14,6 +14,12 @@
 	import { untrack, onMount } from 'svelte'; // onMount is used for browser-only Plotly integration
 	// Plotly import moved to browser-only lifecycle below
 	import { isTimeField, formatRelative, formatAbsolute } from '$lib/timeFormat';
+	import {
+		formatFieldValue,
+		getFieldLabel,
+		getFieldLabelWithUnit,
+		unitSuffix
+	} from '$lib/fieldMetadata';
 
 	// Helper: Compute 3D time indicator plane data for restyle
 	function get3DIndicatorRestyleData(
@@ -239,8 +245,16 @@
 		'#06b6d4' // cyan
 	];
 
-	function prettyLabel(field: string): string {
-		return field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+	function label(field: NumericField): string {
+		return getFieldLabel(field);
+	}
+
+	function labelWithUnit(field: NumericField): string {
+		return getFieldLabelWithUnit(field);
+	}
+
+	function hoverLine(field: NumericField, axisKey: 'x' | 'y' | 'z'): string {
+		return `<b>${label(field)}</b>: %{${axisKey}:.3f}${unitSuffix(field)}<br>`;
 	}
 
 	// ---------------------------------------------------------------------------
@@ -376,6 +390,7 @@
 	let tooltipXLabel = $state('');
 	let tooltipXValue = $state('');
 	let tooltipEntries: TooltipEntry[] = $state([]);
+	let renderedSeries = $state<Record<NumericField, number[]>>({} as Record<NumericField, number[]>);
 
 	// ---------------------------------------------------------------------------
 	// Plotly refs
@@ -417,6 +432,11 @@
 		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
 		const sortedXs = order.map((i) => xs[i]);
 		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
+		const seriesMap: Record<NumericField, number[]> = {} as Record<NumericField, number[]>;
+		for (let i = 0; i < ys.length; i++) {
+			seriesMap[ys[i]] = sortedYs[i];
+		}
+		renderedSeries = seriesMap;
 		// The first element after sorting is the earliest row — use its unixtime as the epoch.
 		const firstIdx = order[0];
 		return {
@@ -522,14 +542,11 @@
 			colorscale: 'Viridis',
 			showscale: true,
 			colorbar: {
-				title: { text: prettyLabel(zField), side: 'right' },
+				title: { text: labelWithUnit(zField), side: 'right' },
 				thickness: 15,
 				len: 0.7
 			},
-			hovertemplate:
-				`<b>${prettyLabel(xField)}</b>: %{x:.3f}<br>` +
-				`<b>${prettyLabel(yField)}</b>: %{y:.3f}<br>` +
-				`<b>${prettyLabel(zField)}</b>: %{z:.3f}<extra></extra>`
+			hovertemplate: `${hoverLine(xField, 'x')}${hoverLine(yField, 'y')}${hoverLine(zField, 'z')}<extra></extra>`
 		};
 	}
 
@@ -621,6 +638,7 @@
 
 		// Branch: 2D vs 3D rendering
 		if (is3D) {
+			renderedSeries = {} as Record<NumericField, number[]>;
 			// ============ 3D RENDERING PATH ============
 			// Optimization: Use decimated data for 3D plots if dataset is large
 			const MAX_3D_POINTS = 5000;
@@ -662,15 +680,12 @@
 							z: sortedZs[zi],
 							type: 'scatter3d',
 							mode: 'lines',
-							name: `${prettyLabel(ys[yi])} vs ${prettyLabel(zs[zi])}`,
+							name: `${labelWithUnit(ys[yi])} vs ${labelWithUnit(zs[zi])}`,
 							line: {
 								color: SERIES_COLORS[colorIdx],
 								width: 3
 							},
-							hovertemplate:
-								`<b>${prettyLabel(x)}</b>: %{x:.3f}<br>` +
-								`<b>${prettyLabel(ys[yi])}</b>: %{y:.3f}<br>` +
-								`<b>${prettyLabel(zs[zi])}</b>: %{z:.3f}<extra></extra>`
+							hovertemplate: `${hoverLine(x, 'x')}${hoverLine(ys[yi], 'y')}${hoverLine(zs[zi], 'z')}<extra></extra>`
 						});
 					}
 				}
@@ -682,7 +697,7 @@
 						const surfaceTrace = buildSurfaceTrace(lines, x, ys[yi], zs[zi]);
 						// Customize colorscale per trace
 						const colorIdx = (yi * zs.length + zi) % SERIES_COLORS.length;
-						surfaceTrace.name = `${prettyLabel(ys[yi])} × ${prettyLabel(zs[zi])}`;
+						surfaceTrace.name = `${labelWithUnit(ys[yi])} × ${labelWithUnit(zs[zi])}`;
 						surfaceTrace.colorscale = [
 							[0, '#0c4a6e'], // dark blue
 							[0.25, '#3b82f6'], // blue
@@ -706,7 +721,7 @@
 				margin: { l: 0, r: 0, t: 16, b: 0 },
 				scene: {
 					xaxis: {
-						title: { text: prettyLabel(x), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
+						title: { text: labelWithUnit(x), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
 						showgrid: true,
 						gridcolor: darkMode ? '#23272f' : '#e5e7eb',
 						color: darkMode ? '#f4f4f5' : '#27272a',
@@ -714,7 +729,7 @@
 					},
 					yaxis: {
 						title: {
-							text: ys.length === 1 ? prettyLabel(ys[0]) : 'Y',
+							text: ys.length === 1 ? labelWithUnit(ys[0]) : 'Y Series (mixed units)',
 							font: { color: darkMode ? '#f4f4f5' : '#27272a' }
 						},
 						showgrid: true,
@@ -724,7 +739,7 @@
 					},
 					zaxis: {
 						title: {
-							text: zs.length === 1 ? prettyLabel(zs[0]) : 'Z',
+							text: zs.length === 1 ? labelWithUnit(zs[0]) : 'Z Series (mixed units)',
 							font: { color: darkMode ? '#f4f4f5' : '#27272a' }
 						},
 						showgrid: true,
@@ -795,8 +810,8 @@
 				const baseTrace: any = {
 					x: sortedXs,
 					y: ysArr,
-					name: prettyLabel(ys[i]),
-					hoverinfo: 'x+y+name',
+					name: labelWithUnit(ys[i]),
+					hovertemplate: `${hoverLine(x, 'x')}${hoverLine(ys[i], 'y')}<extra></extra>`,
 					yaxis: axis
 				};
 
@@ -840,7 +855,7 @@
 				paper_bgcolor: darkMode ? '#18181b' : '#fff', // dark: neutral-900, light: white
 				plot_bgcolor: darkMode ? '#18181b' : '#fff',
 				xaxis: {
-					title: { text: prettyLabel(x), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
+					title: { text: labelWithUnit(x), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
 					showgrid: true,
 					color: darkMode ? '#f4f4f5' : '#27272a', // axis, ticks
 					tickcolor: darkMode ? '#8a8a8a' : '#bababa',
@@ -851,7 +866,7 @@
 					showline: true
 				},
 				yaxis: {
-					title: { text: prettyLabel(ys[0]), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
+					title: { text: labelWithUnit(ys[0]), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
 					showgrid: true,
 					color: darkMode ? '#f4f4f5' : '#27272a', // axis, ticks
 					tickcolor: darkMode ? '#8a8a8a' : '#bababa',
@@ -883,7 +898,10 @@
 			if (ys.length > 1) {
 				layout.yaxis2 = {
 					title: {
-						text: prettyLabel(ys.slice(1).join(', ')),
+						text: ys
+							.slice(1)
+							.map((field) => labelWithUnit(field))
+							.join(', '),
 						font: { color: darkMode ? '#f4f4f5' : '#27272a' }
 					},
 					showgrid: false,
@@ -1111,16 +1129,30 @@
 				const hoverHandler = (event: any) => {
 					if (event && event.points && event.points.length > 0) {
 						const pt = event.points[0];
+						const pointIndex =
+							typeof pt.pointIndex === 'number'
+								? pt.pointIndex
+								: typeof pt.pointNumber === 'number'
+									? pt.pointNumber
+									: null;
 						tooltipVisible = true;
 						const chartWidth = container?.clientWidth ?? 0;
 						tooltipFlipped = pt.xpx > chartWidth / 2;
 						tooltipX = tooltipFlipped ? pt.xpx - 16 : pt.xpx + 16;
 						tooltipY = pt.ypx;
-						tooltipXLabel = pt.xaxis.title.text ?? prettyLabel(xField);
-						tooltipXValue = pt.x != null ? pt.x.toFixed(3) : '—';
+						tooltipXLabel = pt.xaxis.title.text ?? labelWithUnit(xField);
+						tooltipXValue = formatFieldValue(xField, typeof pt.x === 'number' ? pt.x : undefined, {
+							includeUnit: true
+						});
 						tooltipEntries = yFields.map((field, i) => ({
-							label: prettyLabel(field),
-							value: pt.y != null ? pt.y.toFixed(3) : '—',
+							label: labelWithUnit(field),
+							value: formatFieldValue(
+								field,
+								pointIndex !== null && renderedSeries[field]
+									? renderedSeries[field][pointIndex]
+									: undefined,
+								{ includeUnit: true }
+							),
 							color: SERIES_COLORS[i % SERIES_COLORS.length]
 						}));
 					}
@@ -1245,7 +1277,7 @@
 				class="rounded-md border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-primary-900 dark:text-neutral-100 px-2 py-1 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 transition"
 			>
 				{#each NUMERIC_FIELDS as f (f)}
-					<option value={f}>{prettyLabel(f)}</option>
+					<option value={f}>{labelWithUnit(f)}</option>
 				{/each}
 			</select>
 		</label>
@@ -1268,7 +1300,7 @@
 						></span>
 					{/each}
 					<span class="ml-1 text-primary-900 dark:text-neutral-100"
-						>{yFields.length === 1 ? prettyLabel(yFields[0]) : `${yFields.length} series`}</span
+						>{yFields.length === 1 ? labelWithUnit(yFields[0]) : `${yFields.length} series`}</span
 					>
 					<span class="text-primary-400 dark:text-neutral-400">▾</span>
 				</button>
@@ -1296,7 +1328,7 @@
 									class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-primary/20 bg-primary/30"
 									style={selected ? `background:${SERIES_COLORS[idx % SERIES_COLORS.length]}` : ''}
 								></span>
-								{prettyLabel(f)}
+								{labelWithUnit(f)}
 							</button>
 						{/each}
 					</div>
@@ -1323,7 +1355,7 @@
 							></span>
 						{/each}
 						<span class="ml-1 text-primary-900 dark:text-neutral-100"
-							>{zFields.length === 1 ? prettyLabel(zFields[0]) : `${zFields.length} series`}</span
+							>{zFields.length === 1 ? labelWithUnit(zFields[0]) : `${zFields.length} series`}</span
 						>
 						<span class="text-primary-400 dark:text-neutral-400">▾</span>
 					</button>
@@ -1353,7 +1385,7 @@
 											? `background:${SERIES_COLORS[idx % SERIES_COLORS.length]}`
 											: ''}
 									></span>
-									{prettyLabel(f)}
+									{labelWithUnit(f)}
 								</button>
 							{/each}
 						</div>
