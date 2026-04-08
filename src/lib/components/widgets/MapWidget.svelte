@@ -3,8 +3,9 @@
 	import { browser } from '$app/environment';
 	import { formatLabelWithUnit, isNumericField } from '$lib/fieldMetadata';
 	import { loadLeaflet } from '$lib/leaflet';
+	import { findNearestTelemetryIndex } from '$lib/mapSelection';
 	import { dataStore } from '$lib/stores/dataStore';
-	import { timeIndexStore } from '$lib/stores/time';
+	import { setIndex, timeIndexStore } from '$lib/stores/time';
 	import { NUMERIC_FIELDS, type MapConfig, type NumericField } from '$lib/types';
 	import type * as L from 'leaflet';
 
@@ -24,6 +25,8 @@
 		color: string;
 	};
 
+	const BRAND_ACCENT = '#a60f2d';
+
 	const { config: _cfg, onConfigChange }: Props = $props();
 	const _seedField: NumericField = untrack(() => {
 		const field = _cfg?.field;
@@ -35,6 +38,7 @@
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: L.Map | null = $state(null);
 	let trackLayers: L.Polyline[] = $state([]);
+	let trackHitArea: L.Polyline | null = $state(null);
 	let startMarker: L.CircleMarker | null = $state(null);
 	let endMarker: L.CircleMarker | null = $state(null);
 	let timeMarker: L.CircleMarker | null = $state(null);
@@ -68,6 +72,17 @@
 			return [{ lat: line.lat, lon: line.lon, value }];
 		});
 	});
+
+	const trackSamples = $derived.by(() =>
+		$dataStore.telemetry.flatMap((line, telemetryIndex) =>
+			typeof line.lat === 'number' &&
+			typeof line.lon === 'number' &&
+			line.lat !== 0 &&
+			line.lon !== 0
+				? [{ telemetryIndex, lat: line.lat, lon: line.lon }]
+				: []
+		)
+	);
 
 	const colorDomain = $derived.by(() => {
 		const values = trackPoints.map((point) => point.value).filter((value) => Number.isFinite(value));
@@ -112,6 +127,11 @@
 			leafletMap.removeLayer(layer);
 		}
 		trackLayers = [];
+
+		if (trackHitArea) {
+			leafletMap.removeLayer(trackHitArea);
+			trackHitArea = null;
+		}
 	}
 
 	function clearEndpointMarkers() {
@@ -273,6 +293,7 @@
 
 		let cancelled = false;
 		const points = displayTrackPoints;
+		const samples = trackSamples;
 		const { min, max } = colorDomain;
 		const darkTheme = isDarkTheme;
 		const fittedTrackKey = trackPoints.map((point) => `${point.lat},${point.lon}`).join('|');
@@ -289,16 +310,34 @@
 			}
 
 			for (const segmentDef of buildColoredSegments(points, min, max)) {
-				const segment = L.polyline(
-					segmentDef.coords,
-					{
-						color: segmentDef.color,
-						weight: 4,
-						opacity: 0.95,
-						renderer: trackRenderer ?? undefined
-					}
-				).addTo(leafletMap);
+				const segment = L.polyline(segmentDef.coords, {
+					color: segmentDef.color,
+					weight: 4,
+					opacity: 0.95,
+					renderer: trackRenderer ?? undefined
+				}).addTo(leafletMap);
 				trackLayers.push(segment);
+			}
+
+			const trackCoords: [number, number][] = samples.map((sample) => [sample.lat, sample.lon]);
+			if (trackCoords.length > 1) {
+				trackHitArea = L.polyline(trackCoords, {
+					color: BRAND_ACCENT,
+					weight: 16,
+					opacity: 0,
+					renderer: trackRenderer ?? undefined
+				}).addTo(leafletMap);
+
+				trackHitArea.on('click', (event: L.LeafletMouseEvent) => {
+					const nearestIndex = findNearestTelemetryIndex(
+						samples,
+						event.latlng.lat,
+						event.latlng.lng
+					);
+					if (nearestIndex !== null) {
+						setIndex(nearestIndex);
+					}
+				});
 			}
 
 			const startColor = darkTheme ? '#22c55e' : '#16a34a';
@@ -371,8 +410,8 @@
 
 			timeMarker = L.circleMarker([line.lat, line.lon], {
 				radius: 9,
-				color: '#a60f2d',
-				fillColor: '#a60f2d',
+				color: BRAND_ACCENT,
+				fillColor: BRAND_ACCENT,
 				fillOpacity: 0.85,
 				weight: 4
 			}).addTo(leafletMap);

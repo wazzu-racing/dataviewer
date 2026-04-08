@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { get } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MapWidget from '$lib/components/widgets/MapWidget.svelte';
-import type { DataLine } from '$lib/types';
 import { dataStore, type DataState } from '$lib/stores/dataStore';
-import { setIndex } from '$lib/stores/time';
+import { selectedIndex, setIndex } from '$lib/stores/time';
+import type { DataLine } from '$lib/types';
 
 const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBounds, mockRenderer } = vi.hoisted(
 	() => {
@@ -12,7 +13,8 @@ const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBound
 		const mockPolyline = {
 			addTo: vi.fn().mockReturnThis(),
 			getBounds: vi.fn().mockReturnValue(mockBounds),
-			remove: vi.fn()
+			remove: vi.fn(),
+			on: vi.fn().mockReturnThis()
 		};
 		const mockCircleMarker = {
 			addTo: vi.fn().mockReturnThis(),
@@ -124,6 +126,7 @@ describe('MapWidget', () => {
 		mockMap.fitBounds.mockReturnThis();
 		mockPolyline.addTo.mockReturnThis();
 		mockPolyline.getBounds.mockReturnValue(mockBounds);
+		mockPolyline.on.mockReturnThis();
 		mockCircleMarker.addTo.mockReturnThis();
 		mockCircleMarker.bindTooltip.mockReturnThis();
 		mockTileLayer.addTo.mockReturnThis();
@@ -165,7 +168,7 @@ describe('MapWidget', () => {
 		render(MapWidget);
 
 		await waitFor(() => {
-			expect(mockL.polyline).toHaveBeenCalledTimes(2);
+			expect(mockL.polyline).toHaveBeenCalledTimes(3);
 		});
 
 		expect(mockL.polyline).toHaveBeenNthCalledWith(
@@ -188,6 +191,19 @@ describe('MapWidget', () => {
 			expect.objectContaining({
 				color: expect.stringMatching(/^rgb\(/),
 				weight: 4
+			})
+		);
+		expect(mockL.polyline).toHaveBeenNthCalledWith(
+			3,
+			[
+				[46.73, -117.28],
+				[46.74, -117.29],
+				[46.75, -117.3]
+			],
+			expect.objectContaining({
+				color: '#a60f2d',
+				weight: 16,
+				opacity: 0
 			})
 		);
 	});
@@ -227,15 +243,24 @@ describe('MapWidget', () => {
 		render(MapWidget);
 
 		await waitFor(() => {
-			expect(mockL.polyline).toHaveBeenCalledTimes(1);
+			expect(mockL.polyline).toHaveBeenCalledTimes(2);
 		});
 
-		expect(mockL.polyline).toHaveBeenCalledWith(
+		expect(mockL.polyline).toHaveBeenNthCalledWith(
+			1,
 			[
 				[46.73, -117.28],
 				[46.75, -117.3]
 			],
-			expect.anything()
+			expect.objectContaining({ weight: 4 })
+		);
+		expect(mockL.polyline).toHaveBeenNthCalledWith(
+			2,
+			[
+				[46.73, -117.28],
+				[46.75, -117.3]
+			],
+			expect.objectContaining({ color: '#a60f2d', opacity: 0, weight: 16 })
 		);
 	});
 
@@ -255,5 +280,33 @@ describe('MapWidget', () => {
 		await waitFor(() => {
 			expect(onConfigChange).toHaveBeenCalledWith({ field: 'tps' });
 		});
+	});
+
+	it('updates the global time index when the track is clicked', async () => {
+		syncTelemetry([
+			makeDataLine({ lat: 0, lon: 0 }),
+			makeDataLine({ lat: 46.73, lon: -117.28 }),
+			makeDataLine({ lat: 46.74, lon: -117.29 }),
+			makeDataLine({ lat: 46.75, lon: -117.3 })
+		]);
+		setIndex(0);
+
+		render(MapWidget);
+
+		await waitFor(() => {
+			expect(mockPolyline.on).toHaveBeenCalledWith('click', expect.any(Function));
+		});
+
+		const clickHandler = mockPolyline.on.mock.calls.find(([eventName]) => eventName === 'click')?.[1];
+		expect(clickHandler).toBeTypeOf('function');
+
+		clickHandler({
+			latlng: {
+				lat: 46.7398,
+				lng: -117.2902
+			}
+		});
+
+		expect(get(selectedIndex)).toBe(2);
 	});
 });
