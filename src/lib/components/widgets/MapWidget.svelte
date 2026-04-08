@@ -399,16 +399,21 @@
 	class="relative flex h-full w-full flex-col overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-primary/15 group focus-within:ring-2 focus-within:ring-primary dark:bg-neutral-900"
 >
 	<div class="shrink-0 border-b border-primary/10 bg-white/95 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900/95">
-		<select
-			bind:value={selectedField}
-			onchange={persistConfig}
-			class="w-full rounded-md border border-primary/20 bg-white px-2 py-1 text-xs font-semibold text-primary-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-			aria-label="Map heatmap variable"
+		<label
+			class="flex max-w-xs items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-neutral-300"
 		>
-			{#each HEATMAP_FIELDS as field (field)}
-				<option value={field}>{formatLabelWithUnit(field)}</option>
-			{/each}
-		</select>
+			<span>Hotline</span>
+			<select
+				bind:value={selectedField}
+				onchange={persistConfig}
+				class="min-w-0 flex-1 rounded-md border border-primary/20 bg-white px-2 py-1 text-xs font-semibold text-primary-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+				aria-label="Map heatmap variable"
+			>
+				{#each HEATMAP_FIELDS as field (field)}
+					<option value={field}>{formatLabelWithUnit(field)}</option>
+				{/each}
+			</select>
+		</label>
 	</div>
 
 	<div bind:this={mapContainer} class="min-h-0 flex-1 w-full"></div>
