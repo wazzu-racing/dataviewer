@@ -2,7 +2,8 @@
 	import { dataStore } from '$lib/stores/dataStore';
 	import { browser } from '$app/environment';
 	import { loadLeaflet } from '$lib/leaflet';
-	import { timeIndexStore } from '$lib/stores/time';
+	import { setIndex, timeIndexStore } from '$lib/stores/time';
+	import { findNearestTelemetryIndex } from '$lib/mapSelection';
 	import type * as L from 'leaflet';
 
 	let mapContainer: HTMLDivElement | undefined = $state();
@@ -15,6 +16,13 @@
 	);
 
 	let isDarkTheme = $state(false);
+	const trackSamples = $derived(
+		$dataStore.telemetry.flatMap((line, telemetryIndex) =>
+			line.lat !== 0 && line.lon !== 0
+				? [{ telemetryIndex, lat: line.lat, lon: line.lon }]
+				: []
+		)
+	);
 
 	$effect(() => {
 		if (!browser) return;
@@ -75,12 +83,7 @@
 			}
 
 			// Draw/update GPS track
-			const lines = $dataStore.telemetry;
-			if (lines.length === 0) return;
-
-			const coords: [number, number][] = lines
-				.filter((l) => l.lat !== 0 && l.lon !== 0)
-				.map((l) => [l.lat, l.lon]);
+			const coords: [number, number][] = trackSamples.map((sample) => [sample.lat, sample.lon]);
 			if (coords.length === 0) return;
 
 			if (trackLine) {
@@ -88,6 +91,16 @@
 			}
 			const trackColor = BRAND_ACCENT;
 			trackLine = L.polyline(coords, { color: trackColor, weight: 3 }).addTo(leafletMap);
+			trackLine.on('click', (event: L.LeafletMouseEvent) => {
+				const nearestIndex = findNearestTelemetryIndex(
+					trackSamples,
+					event.latlng.lat,
+					event.latlng.lng
+				);
+				if (nearestIndex !== null) {
+					setIndex(nearestIndex);
+				}
+			});
 
 			// Start/End markers
 			const startColor = darkTheme ? GREEN_DARK : GREEN_LIGHT;

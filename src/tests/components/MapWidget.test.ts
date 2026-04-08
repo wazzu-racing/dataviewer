@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/svelte';
 import MapWidget from '$lib/components/widgets/MapWidget.svelte';
 import { data as globalData } from '$lib/data.svelte';
+import { dataStore } from '$lib/stores/dataStore';
+import { get } from 'svelte/store';
+import { selectedIndex, setIndex } from '$lib/stores/time';
 import type { DataLine } from '$lib/types';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +17,8 @@ const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer } = vi.hoi
 	const mockPolyline = {
 		addTo: vi.fn().mockReturnThis(),
 		getBounds: vi.fn().mockReturnValue({ isValid: () => true }),
-		remove: vi.fn()
+		remove: vi.fn(),
+		on: vi.fn().mockReturnThis()
 	};
 	const mockCircleMarker = {
 		addTo: vi.fn().mockReturnThis(),
@@ -105,6 +109,8 @@ function makeDataLine(lat: number, lon: number): DataLine {
 describe('MapWidget', () => {
 	beforeEach(() => {
 		globalData.lines = [];
+		dataStore.set({ telemetry: [], widgets: [] });
+		setIndex(0);
 		vi.clearAllMocks();
 		// Reset mock return values after vi.clearAllMocks() wipes them
 		mockL.map.mockReturnValue(mockMap);
@@ -114,6 +120,7 @@ describe('MapWidget', () => {
 		mockMap.setView.mockReturnThis();
 		mockPolyline.addTo.mockReturnThis();
 		mockPolyline.getBounds.mockReturnValue({ isValid: () => true });
+		mockPolyline.on.mockReturnThis();
 		mockCircleMarker.addTo.mockReturnThis();
 		mockCircleMarker.bindTooltip.mockReturnThis();
 		mockTileLayer.addTo.mockReturnThis();
@@ -121,6 +128,8 @@ describe('MapWidget', () => {
 
 	afterEach(() => {
 		globalData.lines = [];
+		dataStore.set({ telemetry: [], widgets: [] });
+		setIndex(0);
 	});
 
 	it('renders without error when no data is loaded', () => {
@@ -134,7 +143,9 @@ describe('MapWidget', () => {
 	});
 
 	it('does not show "No data loaded" when data is present', () => {
-		globalData.lines = [makeDataLine(46.7327, -117.28)];
+		const lines = [makeDataLine(46.7327, -117.28)];
+		globalData.lines = lines;
+		dataStore.set({ telemetry: lines, widgets: [] });
 		const { queryByText } = render(MapWidget);
 		expect(queryByText(/No data loaded/)).toBeNull();
 	});
@@ -152,6 +163,7 @@ describe('MapWidget', () => {
 			makeDataLine(46.75, -117.3)
 		];
 		globalData.lines = lines;
+		dataStore.set({ telemetry: lines, widgets: [] });
 
 		render(MapWidget);
 
@@ -162,7 +174,7 @@ describe('MapWidget', () => {
 					[46.74, -117.29],
 					[46.75, -117.3]
 				],
-				expect.objectContaining({ color: '#3b82f6' })
+				expect.objectContaining({ color: '#a60f2d' })
 			);
 		});
 	});
@@ -170,6 +182,7 @@ describe('MapWidget', () => {
 	it('places start and end circle markers', async () => {
 		const lines = [makeDataLine(46.73, -117.28), makeDataLine(46.75, -117.3)];
 		globalData.lines = lines;
+		dataStore.set({ telemetry: lines, widgets: [] });
 
 		render(MapWidget);
 
@@ -181,7 +194,7 @@ describe('MapWidget', () => {
 		expect(mockL.circleMarker).toHaveBeenNthCalledWith(
 			1,
 			[46.73, -117.28],
-			expect.objectContaining({ color: '#22c55e' })
+			expect.objectContaining({ color: '#16a34a' })
 		);
 		// Second call is end (red)
 		expect(mockL.circleMarker).toHaveBeenNthCalledWith(
@@ -192,11 +205,13 @@ describe('MapWidget', () => {
 	});
 
 	it('filters out rows where lat=0 or lon=0', async () => {
-		globalData.lines = [
+		const lines = [
 			makeDataLine(0, 0), // should be filtered
 			makeDataLine(46.73, -117.28),
 			makeDataLine(0, -117.29) // should be filtered (lat=0)
 		];
+		globalData.lines = lines;
+		dataStore.set({ telemetry: lines, widgets: [] });
 
 		render(MapWidget);
 
@@ -204,5 +219,34 @@ describe('MapWidget', () => {
 			// Only one valid coordinate
 			expect(mockL.polyline).toHaveBeenCalledWith([[46.73, -117.28]], expect.anything());
 		});
+	});
+
+	it('updates the global time index when the track is clicked', async () => {
+		const lines = [
+			makeDataLine(0, 0),
+			makeDataLine(46.73, -117.28),
+			makeDataLine(46.74, -117.29),
+			makeDataLine(46.75, -117.3)
+		];
+		globalData.lines = lines;
+		dataStore.set({ telemetry: lines, widgets: [] });
+
+		render(MapWidget);
+
+		await waitFor(() => {
+			expect(mockPolyline.on).toHaveBeenCalledWith('click', expect.any(Function));
+		});
+
+		const clickHandler = mockPolyline.on.mock.calls.find(([eventName]) => eventName === 'click')?.[1];
+		expect(clickHandler).toBeTypeOf('function');
+
+		clickHandler({
+			latlng: {
+				lat: 46.7398,
+				lng: -117.2902
+			}
+		});
+
+		expect(get(selectedIndex)).toBe(2);
 	});
 });
