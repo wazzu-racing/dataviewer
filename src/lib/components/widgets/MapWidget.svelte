@@ -50,7 +50,8 @@
 	let isDarkTheme = $state(false);
 
 	const hasData = $derived(
-		$dataStore.telemetry.length > 0 && $dataStore.telemetry.some((line) => line.lat !== 0 && line.lon !== 0)
+		$dataStore.telemetry.length > 0 &&
+			$dataStore.telemetry.some((line) => line.lat !== 0 && line.lon !== 0)
 	);
 
 	const trackPoints = $derived.by<TrackPoint[]>(() => {
@@ -85,14 +86,19 @@
 	);
 
 	const colorDomain = $derived.by(() => {
-		const values = trackPoints.map((point) => point.value).filter((value) => Number.isFinite(value));
+		const values = trackPoints
+			.map((point) => point.value)
+			.filter((value) => Number.isFinite(value));
 		if (values.length === 0) {
 			return { min: 0, max: 1 };
 		}
-		return {
-			min: Math.min(...values),
-			max: Math.max(...values)
-		};
+		let min = values[0];
+		let max = values[0];
+		for (let i = 1; i < values.length; i++) {
+			if (values[i] < min) min = values[i];
+			if (values[i] > max) max = values[i];
+		}
+		return { min, max };
 	});
 
 	const displayTrackPoints = $derived.by<TrackPoint[]>(() => {
@@ -152,7 +158,11 @@
 		return Math.max(0, Math.min(1, (value - min) / (max - min)));
 	}
 
-	function interpolateColor(start: [number, number, number], end: [number, number, number], t: number) {
+	function interpolateColor(
+		start: [number, number, number],
+		end: [number, number, number],
+		t: number
+	) {
 		const [sr, sg, sb] = start;
 		const [er, eg, eb] = end;
 		const r = Math.round(sr + (er - sr) * t);
@@ -192,7 +202,11 @@
 				);
 	}
 
-	function buildColoredSegments(points: TrackPoint[], min: number, max: number): ColoredTrackSegment[] {
+	function buildColoredSegments(
+		points: TrackPoint[],
+		min: number,
+		max: number
+	): ColoredTrackSegment[] {
 		if (points.length < 2) return [];
 
 		const segments: ColoredTrackSegment[] = [];
@@ -247,7 +261,7 @@
 	});
 
 	$effect(() => {
-		if (!browser || !mapContainer) return;
+		if (!browser || !mapContainer || !hasData) return;
 
 		let cancelled = false;
 
@@ -296,7 +310,10 @@
 		const samples = trackSamples;
 		const { min, max } = colorDomain;
 		const darkTheme = isDarkTheme;
-		const fittedTrackKey = trackPoints.map((point) => `${point.lat},${point.lon}`).join('|');
+		const fittedTrackKey =
+			trackPoints.length === 0
+				? ''
+				: `${trackPoints.length}|${trackPoints[0].lat},${trackPoints[0].lon}|${trackPoints[trackPoints.length - 1].lat},${trackPoints[trackPoints.length - 1].lon}`;
 
 		loadLeaflet().then((L) => {
 			if (cancelled || !leafletMap) return;
@@ -362,7 +379,9 @@
 				.addTo(leafletMap);
 
 			if (fittedTrackKey !== lastFittedTrackKey) {
-				const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lon] as [number, number]));
+				const bounds = L.latLngBounds(
+					points.map((point) => [point.lat, point.lon] as [number, number])
+				);
 				leafletMap.fitBounds(bounds, { padding: [20, 20] });
 			}
 			lastFittedTrackKey = fittedTrackKey;
@@ -437,7 +456,9 @@
 <div
 	class="relative flex h-full w-full flex-col overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-primary/15 group focus-within:ring-2 focus-within:ring-primary dark:bg-neutral-900"
 >
-	<div class="shrink-0 border-b border-primary/10 bg-white/95 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900/95">
+	<div
+		class="shrink-0 border-b border-primary/10 bg-white/95 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900/95"
+	>
 		<label
 			class="flex max-w-xs items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-neutral-300"
 		>
