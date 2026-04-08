@@ -90,6 +90,11 @@ export type GaugeConfig = {
 	field: string; // e.g. 'rpm'
 };
 
+/** Per-pane configuration for the Map widget */
+export type MapConfig = {
+	field: NumericField; // e.g. 'ground_speed'
+};
+
 /** Per-pane configuration for the Table widget */
 export type TableConfig = {
 	visibleColumns: string[]; // e.g. ['time', 'rpm', 'tps']

@@ -1,20 +1,208 @@
 <script lang="ts">
-	import { dataStore } from '$lib/stores/dataStore';
+	import { untrack } from 'svelte';
 	import { browser } from '$app/environment';
+	import { formatLabelWithUnit, isNumericField } from '$lib/fieldMetadata';
 	import { loadLeaflet } from '$lib/leaflet';
+	import { dataStore } from '$lib/stores/dataStore';
 	import { timeIndexStore } from '$lib/stores/time';
+	import { NUMERIC_FIELDS, type MapConfig, type NumericField } from '$lib/types';
 	import type * as L from 'leaflet';
 
-	let mapContainer: HTMLDivElement | undefined = $state();
-	let leafletMap: L.Map | null = null;
-	let trackLine: L.Polyline | null = null;
+	type Props = {
+		config?: MapConfig;
+		onConfigChange?: (cfg: MapConfig) => void;
+	};
 
-	// HACK: compute if there is any usable GPS data, up front and after import
+	type TrackPoint = {
+		lat: number;
+		lon: number;
+		value: number;
+	};
+
+	type ColoredTrackSegment = {
+		coords: [number, number][];
+		color: string;
+	};
+
+	const { config: _cfg, onConfigChange }: Props = $props();
+	const _seedField: NumericField = untrack(() => {
+		const field = _cfg?.field;
+		return field && isNumericField(field) ? field : 'ground_speed';
+	});
+
+	const HEATMAP_FIELDS = NUMERIC_FIELDS;
+
+	let mapContainer: HTMLDivElement | undefined = $state();
+	let leafletMap: L.Map | null = $state(null);
+	let trackLayers: L.Polyline[] = $state([]);
+	let startMarker: L.CircleMarker | null = $state(null);
+	let endMarker: L.CircleMarker | null = $state(null);
+	let timeMarker: L.CircleMarker | null = $state(null);
+	let trackRenderer: L.Renderer | null = $state(null);
+	let mapWidth = $state(0);
+	let lastFittedTrackKey = $state('');
+
+	let selectedField: NumericField = $state(_seedField);
+	let isDarkTheme = $state(false);
+
 	const hasData = $derived(
-		$dataStore.telemetry.length > 0 && $dataStore.telemetry.some((l) => l.lat !== 0 && l.lon !== 0)
+		$dataStore.telemetry.length > 0 && $dataStore.telemetry.some((line) => line.lat !== 0 && line.lon !== 0)
 	);
 
-	let isDarkTheme = $state(false);
+	const trackPoints = $derived.by<TrackPoint[]>(() => {
+		return $dataStore.telemetry.flatMap((line) => {
+			if (
+				typeof line.lat !== 'number' ||
+				typeof line.lon !== 'number' ||
+				line.lat === 0 ||
+				line.lon === 0
+			) {
+				return [];
+			}
+
+			const value = line[selectedField];
+			if (typeof value !== 'number' || !Number.isFinite(value)) {
+				return [];
+			}
+
+			return [{ lat: line.lat, lon: line.lon, value }];
+		});
+	});
+
+	const colorDomain = $derived.by(() => {
+		const values = trackPoints.map((point) => point.value).filter((value) => Number.isFinite(value));
+		if (values.length === 0) {
+			return { min: 0, max: 1 };
+		}
+		return {
+			min: Math.min(...values),
+			max: Math.max(...values)
+		};
+	});
+
+	const displayTrackPoints = $derived.by<TrackPoint[]>(() => {
+		if (trackPoints.length <= 2) {
+			return trackPoints;
+		}
+
+		const maxPoints = Math.max(300, Math.floor(mapWidth * 1.5));
+		if (trackPoints.length <= maxPoints) {
+			return trackPoints;
+		}
+
+		const stride = Math.ceil(trackPoints.length / maxPoints);
+		const sampled: TrackPoint[] = [trackPoints[0]];
+		for (let i = stride; i < trackPoints.length - 1; i += stride) {
+			sampled.push(trackPoints[i]);
+		}
+		const lastPoint = trackPoints[trackPoints.length - 1];
+		if (sampled[sampled.length - 1] !== lastPoint) {
+			sampled.push(lastPoint);
+		}
+		return sampled;
+	});
+
+	function persistConfig() {
+		onConfigChange?.({ field: selectedField });
+	}
+
+	function clearTrackLayers() {
+		if (!leafletMap) return;
+		for (const layer of trackLayers) {
+			leafletMap.removeLayer(layer);
+		}
+		trackLayers = [];
+	}
+
+	function clearEndpointMarkers() {
+		if (!leafletMap) return;
+		if (startMarker) {
+			leafletMap.removeLayer(startMarker);
+			startMarker = null;
+		}
+		if (endMarker) {
+			leafletMap.removeLayer(endMarker);
+			endMarker = null;
+		}
+	}
+
+	function normalizeValue(value: number, min: number, max: number): number {
+		if (!Number.isFinite(value)) return 0;
+		if (max <= min) return 0.5;
+		return Math.max(0, Math.min(1, (value - min) / (max - min)));
+	}
+
+	function interpolateColor(start: [number, number, number], end: [number, number, number], t: number) {
+		const [sr, sg, sb] = start;
+		const [er, eg, eb] = end;
+		const r = Math.round(sr + (er - sr) * t);
+		const g = Math.round(sg + (eg - sg) * t);
+		const b = Math.round(sb + (eb - sb) * t);
+		return `rgb(${r}, ${g}, ${b})`;
+	}
+
+	function interpolateMultiStop(
+		stops: [[number, number, number], [number, number, number], [number, number, number]],
+		t: number
+	): string {
+		if (t <= 0.5) {
+			return interpolateColor(stops[0], stops[1], t / 0.5);
+		}
+		return interpolateColor(stops[1], stops[2], (t - 0.5) / 0.5);
+	}
+
+	function getHeatColor(value: number, min: number, max: number): string {
+		const t = normalizeValue(value, min, max);
+		return isDarkTheme
+			? interpolateMultiStop(
+					[
+						[125, 211, 252],
+						[250, 204, 21],
+						[248, 113, 113]
+					],
+					t
+				)
+			: interpolateMultiStop(
+					[
+						[125, 211, 252],
+						[234, 179, 8],
+						[220, 38, 38]
+					],
+					t
+				);
+	}
+
+	function buildColoredSegments(points: TrackPoint[], min: number, max: number): ColoredTrackSegment[] {
+		if (points.length < 2) return [];
+
+		const segments: ColoredTrackSegment[] = [];
+		const colorBuckets = 24;
+
+		for (let i = 1; i < points.length; i += 1) {
+			const previousPoint = points[i - 1];
+			const currentPoint = points[i];
+			const segmentValue = (previousPoint.value + currentPoint.value) / 2;
+			const normalized = normalizeValue(segmentValue, min, max);
+			const bucket = Math.round(normalized * (colorBuckets - 1)) / (colorBuckets - 1);
+			const segmentColor = getHeatColor(min + (max - min) * bucket, min, max);
+			const nextCoords: [number, number][] = [
+				[previousPoint.lat, previousPoint.lon],
+				[currentPoint.lat, currentPoint.lon]
+			];
+
+			const lastSegment = segments[segments.length - 1];
+			if (lastSegment && lastSegment.color === segmentColor) {
+				lastSegment.coords.push(nextCoords[1]);
+			} else {
+				segments.push({
+					coords: nextCoords,
+					color: segmentColor
+				});
+			}
+		}
+
+		return segments;
+	}
 
 	$effect(() => {
 		if (!browser) return;
@@ -38,23 +226,13 @@
 		};
 	});
 
-	// Theme color constants (match design tokens and branding)
-	const BRAND_ACCENT = '#a60f2d';
-	const GREEN_LIGHT = '#16a34a'; // Tailwind green-600
-	const GREEN_DARK = '#22c55e'; // Tailwind green-500
-	const RED_LIGHT = '#dc2626'; // Tailwind red-600
-	const RED_DARK = '#ef4444'; // Tailwind red-500
-	const CARD_BG_LIGHT = '#fff';
-	const CARD_BG_DARK = '#171717';
-
 	$effect(() => {
-		const darkTheme = isDarkTheme;
-		if (!browser || !mapContainer || !hasData) return;
+		if (!browser || !mapContainer) return;
 
 		let cancelled = false;
 
 		loadLeaflet().then((L) => {
-			if (cancelled) return;
+			if (cancelled || leafletMap) return;
 
 			if (!document.getElementById('leaflet-css')) {
 				const link = document.createElement('link');
@@ -64,34 +242,67 @@
 				document.head.appendChild(link);
 			}
 
-			if (!leafletMap) {
-				leafletMap = L.map(mapContainer!).setView([0, 0], 2);
-				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-					attribution: '© OpenStreetMap contributors',
-					maxZoom: 19
-				}).addTo(leafletMap);
-				mapContainer!.style.overflow = 'hidden';
-				mapContainer!.style.position = 'relative';
+			leafletMap = L.map(mapContainer!).setView([0, 0], 2);
+			trackRenderer = L.canvas({ padding: 0.5 });
+			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				attribution: '© OpenStreetMap contributors',
+				maxZoom: 19
+			}).addTo(leafletMap);
+			mapContainer!.style.overflow = 'hidden';
+			mapContainer!.style.position = 'relative';
+		});
+
+		return () => {
+			cancelled = true;
+			if (leafletMap) {
+				leafletMap.remove();
+				leafletMap = null;
+			}
+			trackLayers = [];
+			startMarker = null;
+			endMarker = null;
+			timeMarker = null;
+			trackRenderer = null;
+			mapWidth = 0;
+			lastFittedTrackKey = '';
+		};
+	});
+
+	$effect(() => {
+		if (!browser || !leafletMap) return;
+
+		let cancelled = false;
+		const points = displayTrackPoints;
+		const { min, max } = colorDomain;
+		const darkTheme = isDarkTheme;
+		const fittedTrackKey = trackPoints.map((point) => `${point.lat},${point.lon}`).join('|');
+
+		loadLeaflet().then((L) => {
+			if (cancelled || !leafletMap) return;
+
+			clearTrackLayers();
+			clearEndpointMarkers();
+
+			if (points.length === 0) {
+				lastFittedTrackKey = '';
+				return;
 			}
 
-			// Draw/update GPS track
-			const lines = $dataStore.telemetry;
-			if (lines.length === 0) return;
-
-			const coords: [number, number][] = lines
-				.filter((l) => l.lat !== 0 && l.lon !== 0)
-				.map((l) => [l.lat, l.lon]);
-			if (coords.length === 0) return;
-
-			if (trackLine) {
-				leafletMap.removeLayer(trackLine);
+			for (const segmentDef of buildColoredSegments(points, min, max)) {
+				const segment = L.polyline(
+					segmentDef.coords,
+					{
+						color: segmentDef.color,
+						weight: 4,
+						opacity: 0.95,
+						renderer: trackRenderer ?? undefined
+					}
+				).addTo(leafletMap);
+				trackLayers.push(segment);
 			}
-			const trackColor = BRAND_ACCENT;
-			trackLine = L.polyline(coords, { color: trackColor, weight: 3 }).addTo(leafletMap);
 
-			// Start/End markers
-			const startColor = darkTheme ? GREEN_DARK : GREEN_LIGHT;
-			L.circleMarker(coords[0], {
+			const startColor = darkTheme ? '#22c55e' : '#16a34a';
+			startMarker = L.circleMarker([points[0].lat, points[0].lon], {
 				radius: 7,
 				color: startColor,
 				fillColor: startColor,
@@ -100,8 +311,9 @@
 				.bindTooltip('Start')
 				.addTo(leafletMap);
 
-			const endColor = darkTheme ? RED_DARK : RED_LIGHT;
-			L.circleMarker(coords[coords.length - 1], {
+			const endColor = darkTheme ? '#ef4444' : '#dc2626';
+			const endPoint = points[points.length - 1];
+			endMarker = L.circleMarker([endPoint.lat, endPoint.lon], {
 				radius: 7,
 				color: endColor,
 				fillColor: endColor,
@@ -110,21 +322,18 @@
 				.bindTooltip('End')
 				.addTo(leafletMap);
 
-			leafletMap.fitBounds(trackLine.getBounds(), { padding: [20, 20] });
+			if (fittedTrackKey !== lastFittedTrackKey) {
+				const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lon] as [number, number]));
+				leafletMap.fitBounds(bounds, { padding: [20, 20] });
+			}
+			lastFittedTrackKey = fittedTrackKey;
 		});
 
 		return () => {
 			cancelled = true;
-			if (leafletMap) {
-				leafletMap.remove();
-				leafletMap = null;
-				trackLine = null;
-			}
 		};
 	});
 
-	// Global time position marker with brand accent
-	let timeMarker: L.CircleMarker | null = null;
 	$effect(() => {
 		if (!browser || !leafletMap || !hasData) {
 			if (timeMarker) {
@@ -136,7 +345,6 @@
 
 		let cancelled = false;
 
-		// Use the same Leaflet instance as the map creation effect
 		loadLeaflet().then((L) => {
 			if (cancelled || !leafletMap) return;
 
@@ -155,14 +363,16 @@
 				}
 				return;
 			}
+
 			if (timeMarker) {
 				leafletMap.removeLayer(timeMarker);
 				timeMarker = null;
 			}
+
 			timeMarker = L.circleMarker([line.lat, line.lon], {
 				radius: 9,
-				color: BRAND_ACCENT,
-				fillColor: BRAND_ACCENT,
+				color: '#a60f2d',
+				fillColor: '#a60f2d',
 				fillOpacity: 0.85,
 				weight: 4
 			}).addTo(leafletMap);
@@ -173,28 +383,39 @@
 		};
 	});
 
-	// Invalidate map size when container resizes
 	$effect(() => {
 		if (!browser || !mapContainer || !leafletMap) return;
 		const observer = new ResizeObserver(() => {
+			mapWidth = mapContainer?.clientWidth ?? 0;
 			leafletMap?.invalidateSize();
 		});
 		observer.observe(mapContainer);
+		mapWidth = mapContainer.clientWidth;
 		return () => observer.disconnect();
 	});
 </script>
 
-<!-- Modern Card Container -->
 <div
-	class="flex flex-col h-full w-full rounded-xl shadow-md ring-1 ring-primary/15 bg-white dark:bg-neutral-900 overflow-hidden group focus-within:ring-2 focus-within:ring-primary"
+	class="relative flex h-full w-full flex-col overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-primary/15 group focus-within:ring-2 focus-within:ring-primary dark:bg-neutral-900"
 >
-	<!-- Map container (Leaflet attaches here) -->
-	<div bind:this={mapContainer} class="h-full w-full"></div>
+	<div class="shrink-0 border-b border-primary/10 bg-white/95 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900/95">
+		<select
+			bind:value={selectedField}
+			onchange={persistConfig}
+			class="w-full rounded-md border border-primary/20 bg-white px-2 py-1 text-xs font-semibold text-primary-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+			aria-label="Map heatmap variable"
+		>
+			{#each HEATMAP_FIELDS as field (field)}
+				<option value={field}>{formatLabelWithUnit(field)}</option>
+			{/each}
+		</select>
+	</div>
 
-	<!-- Empty overlay, styled to match Table/GraphWidget empty state -->
+	<div bind:this={mapContainer} class="min-h-0 flex-1 w-full"></div>
+
 	{#if !hasData}
 		<div
-			class="absolute inset-0 z-10 flex items-center justify-center bg-white/90 dark:bg-neutral-900/95 border border-primary/15 text-primary-700 dark:text-primary-100 text-sm font-semibold rounded-xl shadow-lg pointer-events-auto"
+			class="absolute inset-0 z-10 flex items-center justify-center rounded-xl border border-primary/15 bg-white/90 text-sm font-semibold text-primary-700 shadow-lg pointer-events-auto dark:bg-neutral-900/95 dark:text-primary-100"
 			style="z-index:10;"
 		>
 			No data loaded — use a <span class="mx-1 font-semibold text-primary">Load Data</span> pane to import

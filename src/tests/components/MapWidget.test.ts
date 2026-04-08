@@ -1,52 +1,62 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import MapWidget from '$lib/components/widgets/MapWidget.svelte';
-import { data as globalData } from '$lib/data.svelte';
 import type { DataLine } from '$lib/types';
+import { dataStore, type DataState } from '$lib/stores/dataStore';
+import { setIndex } from '$lib/stores/time';
 
-// ---------------------------------------------------------------------------
-// Mock $lib/leaflet — our thin wrapper around Leaflet.
-// Mocking the wrapper (not leaflet directly) ensures vi.mock intercepts it
-// reliably regardless of whether it's called via static or dynamic import.
-// vi.mock is hoisted, so we must define the mock objects via vi.hoisted().
-// ---------------------------------------------------------------------------
-const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer } = vi.hoisted(() => {
-	const mockPolyline = {
-		addTo: vi.fn().mockReturnThis(),
-		getBounds: vi.fn().mockReturnValue({ isValid: () => true }),
-		remove: vi.fn()
-	};
-	const mockCircleMarker = {
-		addTo: vi.fn().mockReturnThis(),
-		bindTooltip: vi.fn().mockReturnThis()
-	};
-	const mockTileLayer = { addTo: vi.fn().mockReturnThis() };
-	const mockMap = {
-		setView: vi.fn().mockReturnThis(),
-		fitBounds: vi.fn().mockReturnThis(),
-		invalidateSize: vi.fn(),
-		removeLayer: vi.fn(),
-		remove: vi.fn()
-	};
-	const mockL = {
-		map: vi.fn().mockReturnValue(mockMap),
-		tileLayer: vi.fn().mockReturnValue(mockTileLayer),
-		polyline: vi.fn().mockReturnValue(mockPolyline),
-		circleMarker: vi.fn().mockReturnValue(mockCircleMarker)
-	};
-	return { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer };
-});
+const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBounds, mockRenderer } = vi.hoisted(
+	() => {
+		const mockBounds = { isValid: () => true };
+		const mockRenderer = {};
+		const mockPolyline = {
+			addTo: vi.fn().mockReturnThis(),
+			getBounds: vi.fn().mockReturnValue(mockBounds),
+			remove: vi.fn()
+		};
+		const mockCircleMarker = {
+			addTo: vi.fn().mockReturnThis(),
+			bindTooltip: vi.fn().mockReturnThis()
+		};
+		const mockTileLayer = { addTo: vi.fn().mockReturnThis() };
+		const mockMap = {
+			setView: vi.fn().mockReturnThis(),
+			fitBounds: vi.fn().mockReturnThis(),
+			invalidateSize: vi.fn(),
+			removeLayer: vi.fn(),
+			remove: vi.fn()
+		};
+		const mockL = {
+			map: vi.fn().mockReturnValue(mockMap),
+			tileLayer: vi.fn().mockReturnValue(mockTileLayer),
+			polyline: vi.fn().mockReturnValue(mockPolyline),
+			circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
+			latLngBounds: vi.fn().mockReturnValue(mockBounds),
+			canvas: vi.fn().mockReturnValue(mockRenderer)
+		};
+		return { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBounds, mockRenderer };
+	}
+);
 
 vi.mock('$lib/leaflet', () => ({ loadLeaflet: async () => mockL }));
+vi.mock('$app/environment', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$app/environment')>();
+	return {
+		...actual,
+		browser: true
+	};
+});
 
-// Mock $app/environment to report browser = true
-vi.mock('$app/environment', () => ({ browser: true }));
+function syncTelemetry(lines: DataLine[]) {
+	const nextState: DataState = {
+		telemetry: lines,
+		widgets: []
+	};
+	dataStore.set(nextState);
+	setIndex(lines.length > 0 ? lines.length - 1 : 0);
+}
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeDataLine(lat: number, lon: number): DataLine {
+function makeDataLine(overrides: Partial<DataLine> = {}): DataLine {
 	return {
 		write_millis: 0,
 		ecu_millis: 0,
@@ -60,8 +70,8 @@ function makeDataLine(lat: number, lon: number): DataLine {
 		time: 0,
 		syncloss_count: 0,
 		syncloss_code: 0,
-		lat,
-		lon,
+		lat: 0,
+		lon: 0,
 		elev: 0,
 		unixtime: new Date(0),
 		ground_speed: 0,
@@ -95,32 +105,32 @@ function makeDataLine(lat: number, lon: number): DataLine {
 		rad_out: 0,
 		amb_air_temp: 0,
 		brake1: 0,
-		brake2: 0
+		brake2: 0,
+		...overrides
 	};
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 describe('MapWidget', () => {
 	beforeEach(() => {
-		globalData.lines = [];
+		syncTelemetry([]);
 		vi.clearAllMocks();
-		// Reset mock return values after vi.clearAllMocks() wipes them
 		mockL.map.mockReturnValue(mockMap);
 		mockL.tileLayer.mockReturnValue(mockTileLayer);
 		mockL.polyline.mockReturnValue(mockPolyline);
 		mockL.circleMarker.mockReturnValue(mockCircleMarker);
+		mockL.latLngBounds.mockReturnValue(mockBounds);
+		mockL.canvas.mockReturnValue(mockRenderer);
 		mockMap.setView.mockReturnThis();
+		mockMap.fitBounds.mockReturnThis();
 		mockPolyline.addTo.mockReturnThis();
-		mockPolyline.getBounds.mockReturnValue({ isValid: () => true });
+		mockPolyline.getBounds.mockReturnValue(mockBounds);
 		mockCircleMarker.addTo.mockReturnThis();
 		mockCircleMarker.bindTooltip.mockReturnThis();
 		mockTileLayer.addTo.mockReturnThis();
 	});
 
 	afterEach(() => {
-		globalData.lines = [];
+		syncTelemetry([]);
 	});
 
 	it('renders without error when no data is loaded', () => {
@@ -128,81 +138,122 @@ describe('MapWidget', () => {
 		expect(container).toBeTruthy();
 	});
 
-	it('shows "No data loaded" overlay when globalData is empty', () => {
+	it('shows "No data loaded" overlay when telemetry is empty', () => {
 		const { getByText } = render(MapWidget);
 		expect(getByText(/No data loaded/)).toBeTruthy();
 	});
 
-	it('does not show "No data loaded" when data is present', () => {
-		globalData.lines = [makeDataLine(46.7327, -117.28)];
+	it('renders a heatmap variable selector defaulted to ground_speed', () => {
+		const { getByLabelText } = render(MapWidget);
+		const select = getByLabelText('Map heatmap variable') as HTMLSelectElement;
+		expect(select.value).toBe('ground_speed');
+	});
+
+	it('does not show the empty overlay when GPS data is present', () => {
+		syncTelemetry([makeDataLine({ lat: 46.7327, lon: -117.28, ground_speed: 42 })]);
 		const { queryByText } = render(MapWidget);
 		expect(queryByText(/No data loaded/)).toBeNull();
 	});
 
-	it('renders a map container div', () => {
-		const { container } = render(MapWidget);
-		const mapDiv = container.querySelector('.h-full.w-full');
-		expect(mapDiv).toBeTruthy();
-	});
-
-	it('calls L.polyline with correct coordinates', async () => {
-		const lines = [
-			makeDataLine(46.73, -117.28),
-			makeDataLine(46.74, -117.29),
-			makeDataLine(46.75, -117.3)
-		];
-		globalData.lines = lines;
+	it('renders one colored segment per consecutive pair of valid GPS points', async () => {
+		syncTelemetry([
+			makeDataLine({ lat: 46.73, lon: -117.28, ground_speed: 10 }),
+			makeDataLine({ lat: 46.74, lon: -117.29, ground_speed: 20 }),
+			makeDataLine({ lat: 46.75, lon: -117.3, ground_speed: 30 })
+		]);
 
 		render(MapWidget);
 
 		await waitFor(() => {
-			expect(mockL.polyline).toHaveBeenCalledWith(
-				[
-					[46.73, -117.28],
-					[46.74, -117.29],
-					[46.75, -117.3]
-				],
-				expect.objectContaining({ color: '#3b82f6' })
-			);
+			expect(mockL.polyline).toHaveBeenCalledTimes(2);
 		});
+
+		expect(mockL.polyline).toHaveBeenNthCalledWith(
+			1,
+			[
+				[46.73, -117.28],
+				[46.74, -117.29]
+			],
+			expect.objectContaining({
+				color: expect.stringMatching(/^rgb\(/),
+				weight: 4
+			})
+		);
+		expect(mockL.polyline).toHaveBeenNthCalledWith(
+			2,
+			[
+				[46.74, -117.29],
+				[46.75, -117.3]
+			],
+			expect.objectContaining({
+				color: expect.stringMatching(/^rgb\(/),
+				weight: 4
+			})
+		);
 	});
 
 	it('places start and end circle markers', async () => {
-		const lines = [makeDataLine(46.73, -117.28), makeDataLine(46.75, -117.3)];
-		globalData.lines = lines;
+		syncTelemetry([
+			makeDataLine({ lat: 46.73, lon: -117.28, ground_speed: 10 }),
+			makeDataLine({ lat: 46.75, lon: -117.3, ground_speed: 20 })
+		]);
 
 		render(MapWidget);
 
 		await waitFor(() => {
-			// circleMarker called twice: start + end
-			expect(mockL.circleMarker).toHaveBeenCalledTimes(2);
+			expect(mockL.circleMarker).toHaveBeenCalledTimes(3);
 		});
-		// First call is start (green)
+
 		expect(mockL.circleMarker).toHaveBeenNthCalledWith(
 			1,
 			[46.73, -117.28],
-			expect.objectContaining({ color: '#22c55e' })
+			expect.objectContaining({ color: '#16a34a' })
 		);
-		// Second call is end (red)
 		expect(mockL.circleMarker).toHaveBeenNthCalledWith(
 			2,
 			[46.75, -117.3],
-			expect.objectContaining({ color: '#ef4444' })
+			expect.objectContaining({ color: '#dc2626' })
 		);
 	});
 
-	it('filters out rows where lat=0 or lon=0', async () => {
-		globalData.lines = [
-			makeDataLine(0, 0), // should be filtered
-			makeDataLine(46.73, -117.28),
-			makeDataLine(0, -117.29) // should be filtered (lat=0)
-		];
+	it('filters out rows where lat=0 or lon=0 before drawing segments', async () => {
+		syncTelemetry([
+			makeDataLine({ lat: 0, lon: 0, ground_speed: 10 }),
+			makeDataLine({ lat: 46.73, lon: -117.28, ground_speed: 20 }),
+			makeDataLine({ lat: 0, lon: -117.29, ground_speed: 30 }),
+			makeDataLine({ lat: 46.75, lon: -117.3, ground_speed: 40 })
+		]);
 
 		render(MapWidget);
 
 		await waitFor(() => {
-			// Only one valid coordinate
-			expect(mockL.polyline).toHaveBeenCalledWith([[46.73, -117.28]], expect.anything());
+			expect(mockL.polyline).toHaveBeenCalledTimes(1);
+		});
+
+		expect(mockL.polyline).toHaveBeenCalledWith(
+			[
+				[46.73, -117.28],
+				[46.75, -117.3]
+			],
+			expect.anything()
+		);
+	});
+
+	it('seeds selected field from config.field prop', () => {
+		const { getByLabelText } = render(MapWidget, { props: { config: { field: 'tps' } } });
+		const select = getByLabelText('Map heatmap variable') as HTMLSelectElement;
+		expect(select.value).toBe('tps');
+	});
+
+	it('fires onConfigChange when a different field is selected', async () => {
+		const onConfigChange = vi.fn();
+		const { getByLabelText } = render(MapWidget, { props: { onConfigChange } });
+		const select = getByLabelText('Map heatmap variable') as HTMLSelectElement;
+
+		await fireEvent.change(select, { target: { value: 'tps' } });
+
+		await waitFor(() => {
+			expect(onConfigChange).toHaveBeenCalledWith({ field: 'tps' });
 		});
 	});
 });
