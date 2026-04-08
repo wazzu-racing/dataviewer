@@ -398,6 +398,7 @@
 	let container: HTMLDivElement | undefined = $state(); // chart-area div (below controls bar)
 	let chartMount: HTMLDivElement | undefined = $state(); // Plotly chart mount
 	let plotlyInstance: any = $state(null); // Plotly chart reference
+	let wheelFramePending = false;
 
 	/** Returns the pixel dimensions available for the chart. */
 	function plotSize(): { width: number; height: number } {
@@ -410,39 +411,34 @@
 	// ---------------------------------------------------------------------------
 	// Data builder
 	// ---------------------------------------------------------------------------
-	type BuiltData = {
-		data: [number[], ...number[][]];
-		epochDate: Date; // unixtime of the earliest row (by xField)
-		firstMs: number; // xField value of that same earliest row
+	type SortedSeries2D = {
+		xs: number[];
+		ys: number[][];
 	};
 
-	function buildData(lines: DataLine[], x: NumericField, ys: NumericField[]): BuiltData {
-		const xs: number[] = [];
-		const yArrays: number[][] = ys.map(() => []);
-		const unixtimes: Date[] = [];
-		for (const line of lines) {
-			xs.push(line[x] as number);
-			unixtimes.push(line.unixtime);
-			for (let i = 0; i < ys.length; i++) {
-				yArrays[i].push(line[ys[i]] as number);
-			}
+	function decimate2DSeries(
+		sortedXs: number[],
+		sortedYs: number[][],
+		maxPoints: number
+	): SortedSeries2D {
+		if (sortedXs.length <= maxPoints || maxPoints < 3) {
+			return { xs: sortedXs, ys: sortedYs };
 		}
-		// uPlot's closestIdx uses binary search and requires x values sorted ascending.
-		// Sort all arrays together by x to guarantee correct rendering of the full dataset.
-		const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
-		const sortedXs = order.map((i) => xs[i]);
-		const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
-		const seriesMap: Record<NumericField, number[]> = {} as Record<NumericField, number[]>;
-		for (let i = 0; i < ys.length; i++) {
-			seriesMap[ys[i]] = sortedYs[i];
+
+		const stride = Math.ceil(sortedXs.length / maxPoints);
+		const sampledIndices: number[] = [0];
+
+		for (let i = stride; i < sortedXs.length - 1; i += stride) {
+			sampledIndices.push(i);
 		}
-		renderedSeries = seriesMap;
-		// The first element after sorting is the earliest row — use its unixtime as the epoch.
-		const firstIdx = order[0];
+
+		if (sampledIndices[sampledIndices.length - 1] !== sortedXs.length - 1) {
+			sampledIndices.push(sortedXs.length - 1);
+		}
+
 		return {
-			data: [sortedXs, ...sortedYs],
-			epochDate: unixtimes[firstIdx] ?? new Date(0),
-			firstMs: sortedXs[0] ?? 0
+			xs: sampledIndices.map((index) => sortedXs[index]),
+			ys: sortedYs.map((series) => sampledIndices.map((index) => series[index]))
 		};
 	}
 
@@ -633,7 +629,6 @@
 		const x = xField;
 		const ys = yFields;
 		const zs = zFields;
-		const displayMode = xDisplayMode;
 		const mode = mode3D;
 
 		// Branch: 2D vs 3D rendering
@@ -719,6 +714,7 @@
 			// 3D layout
 			const layout3D: any = {
 				margin: { l: 0, r: 0, t: 16, b: 0 },
+				uirevision: `3d:${x}:${ys.join(',')}:${zs.join(',')}:${mode}`,
 				scene: {
 					xaxis: {
 						title: { text: labelWithUnit(x), font: { color: darkMode ? '#f4f4f5' : '#27272a' } },
@@ -779,11 +775,6 @@
 				}
 			};
 
-			// Purge on theme change
-			if (plotlyInstance && plotlyInstance.layout) {
-				plotlyLib.purge(chartMount);
-			}
-
 			plotlyLib.react(chartMount, traces, layout3D, { responsive: true });
 			plotlyInstance = chartMount;
 
@@ -803,12 +794,21 @@
 			const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => xs[a] - xs[b]);
 			const sortedXs = order.map((i) => xs[i]);
 			const sortedYs = yArrays.map((arr) => order.map((i) => arr[i]));
+			const max2DPoints = Math.max(1200, (container?.clientWidth ?? 800) * 2);
+			const decimated = decimate2DSeries(sortedXs, sortedYs, max2DPoints);
+			const plotXs = decimated.xs;
+			const plotYs = decimated.ys;
+			const seriesMap: Record<NumericField, number[]> = {} as Record<NumericField, number[]>;
+			for (let i = 0; i < ys.length; i++) {
+				seriesMap[ys[i]] = plotYs[i];
+			}
+			renderedSeries = seriesMap;
 
-			const traces = sortedYs.map((ysArr, i) => {
+			const traces = plotYs.map((ysArr, i) => {
 				const axis = i === 0 ? 'y' : 'y2';
 				const color = SERIES_COLORS[i % SERIES_COLORS.length];
 				const baseTrace: any = {
-					x: sortedXs,
+					x: plotXs,
 					y: ysArr,
 					name: labelWithUnit(ys[i]),
 					hovertemplate: `${hoverLine(x, 'x')}${hoverLine(ys[i], 'y')}<extra></extra>`,
@@ -845,6 +845,7 @@
 
 			const layout: any = {
 				margin: { l: 40, r: 40, t: 16, b: 40 },
+				uirevision: `2d:${x}:${ys.join(',')}:${mode2D}`,
 				legend: {
 					orientation: 'h',
 					y: -0.2,
@@ -919,256 +920,8 @@
 			const indicatorShape = getTimeIndicatorShape(x, ys, undefined); // Don't depend on currentLine
 			layout.shapes = indicatorShape ? [indicatorShape] : [];
 
-			// If theme changed (dark/light), forcibly purge and re-render so modebar/toolbars/theme update
-			if (plotlyInstance && plotlyInstance.layout) {
-				plotlyLib.purge(chartMount);
-			}
-
 			plotlyLib.react(chartMount, traces, layout, { responsive: true });
 			plotlyInstance = chartMount;
-
-			// Attach overlays/events after render (reuse logic as before) - ONLY IN 2D MODE
-			function attachTooltipEvents() {
-				// ------------------------ CUSTOM WHEEL ZOOM HANDLER ------------------------
-				// Implements pixel-perfect scroll-to-zoom for both axes and axis-specific zoom.
-				// Behavior:
-				//   - Normal wheel: zooms BOTH axes at the pointer.
-				//   - Shift+wheel in margins:
-				//       • Left Y margin: zooms only primary (left) Y axis.
-				//       • Right Y margin (if 2+ yFields): zooms only secondary (right) Y axis.
-				//       • Bottom margin: zooms only X axis (disables Y zoom).
-				//   - Drag (pan) uses Plotly's internal dragmode (never handled here).
-				//   - Margin zone = 24px from each edge. Axis/margin rules:
-				//       1. If shift is NOT held: zoom both axes at cursor.
-				//       2. If shift IS held:
-				//           a. Left Y margin only: zoom only primary Y axis.
-				//           b. Right Y margin only (and 2+ Y axes): zoom only secondary Y axis.
-				//           c. Bottom margin only: zoom only X axis.
-				//           d. If neither, do nothing (require clear margin intent).
-				//   - Edge case: If only one Y axis, right margin has no effect.
-				// Axis relayout handled via Plotly `relayout()` in margin-mode switches.
-				// For full details, see hit-test logic and relayout sections below.
-				// Clean-up logic removes wheel handler on widget/browser unmount.
-				//
-				// Maintainer quick test protocol (after changes):
-				//   - Zoom/pan in all margin regions with/without secondary Y axes.
-				//   - Confirm single-axis-only zoom in margins, dual axis zoom elsewhere.
-				//   - Reset view restores full range; double-click resets as well.
-				//
-				// Safe for runes syntax, SSR, and full TS strict mode.
-				$effect(() => {
-					if (!browser || !chartMount || !plotlyInstance) return;
-
-					// Disable Plotly's internal scroll-zoomer
-					if (plotlyInstance._fullLayout) plotlyInstance._fullLayout.scrollZoom = false;
-
-					const el = chartMount;
-					// Returns [xMin, xMax, yMin, yMax] from Plotly layout
-					function getCurrentRanges(): [number, number, number, number] {
-						const layout = plotlyInstance._fullLayout;
-						const arr = [
-							layout?.xaxis?.range?.[0],
-							layout?.xaxis?.range?.[1],
-							layout?.yaxis?.range?.[0],
-							layout?.yaxis?.range?.[1]
-						].map(Number);
-						if (arr.length !== 4 || arr.some((n) => !isFinite(n))) {
-							return [0, 1, 0, 1];
-						}
-						return arr as [number, number, number, number];
-					}
-
-					/**
-					 * Converts a pixel (x, y) coordinate to data values.
-					 * By default does y for primary axis; pass yAxis = "y2" for secondary right axis.
-					 */
-					function pixelToData(
-						x: number,
-						y: number,
-						yAxis: 'y' | 'y2' = 'y'
-					): { xx: number; yy: number } {
-						const layout = plotlyInstance._fullLayout;
-						const w = el.clientWidth;
-						const h = el.clientHeight;
-
-						// Main axis ranges
-						const [xMin, xMax, yMin, yMax] = getCurrentRanges();
-						const left = layout.margin?.l ?? 40;
-						const top = layout.margin?.t ?? 16;
-						const right = w - (layout.margin?.r ?? 40);
-						const bottom = h - (layout.margin?.b ?? 40);
-
-						const px = Math.max(left, Math.min(x, right));
-						const py = Math.max(top, Math.min(y, bottom));
-
-						const xPct = (px - left) / (right - left);
-						const xx = xMin + (xMax - xMin) * xPct;
-
-						// Which Y axis? Overlayed axes must use their own range
-						if (yAxis === 'y2' && layout.yaxis2 && layout.yaxis2.range) {
-							const y2Min = Number(layout.yaxis2.range[0]);
-							const y2Max = Number(layout.yaxis2.range[1]);
-							// y2 overlays primary, so pixels are the same; just remap the range
-							const yPct = 1 - (py - top) / (bottom - top);
-							const yy = y2Min + (y2Max - y2Min) * yPct;
-							return { xx, yy };
-						} else {
-							const yPct = 1 - (py - top) / (bottom - top);
-							const yy = yMin + (yMax - yMin) * yPct;
-							return { xx, yy };
-						}
-					}
-
-					function wheelHandler(e: WheelEvent): void {
-						if (!(plotlyInstance && plotlyInstance._fullLayout)) return;
-						// Only act if ctrl/cmd are NOT held (browser zoom)
-						if (e.ctrlKey || e.metaKey) return;
-						e.preventDefault();
-						let yMarginZoom: 'left' | 'right' | null = null;
-						let useY2 = false;
-						const [xMin, xMax, yMin, yMax] = getCurrentRanges();
-						let zoomX = true,
-							zoomY = true;
-						const margin = 24; // px: margin region for axis-specific zoom
-
-						if (e.shiftKey) {
-							const layout = plotlyInstance._fullLayout;
-							const rightMargin = el.clientWidth - (layout.margin?.r ?? 40);
-							const hasRightY = ys.length > 1;
-							if (e.offsetY > el.clientHeight - margin) zoomY = false; // in bottom margin
-							if (e.offsetX < margin) {
-								zoomX = false; // in left Y margin
-								yMarginZoom = 'left';
-							}
-							if (hasRightY && e.offsetX > rightMargin) {
-								zoomX = false; // in right Y margin (for yaxis2)
-								yMarginZoom = 'right';
-								useY2 = true;
-							}
-							// Now, if in *either* Y margin, only Y will zoom (zoomY = true, zoomX = false)
-							if (!zoomX && !zoomY) return; // must hit margin for axis-specific zoom
-							// If both are false (i.e., pointer is outside any axis margin), do nothing
-						}
-
-						const { xx, yy } = useY2
-							? pixelToData(e.offsetX, e.offsetY, 'y2')
-							: pixelToData(e.offsetX, e.offsetY, 'y');
-
-						const dz = Math.sign(e.deltaY) * 0.1; // 10% per notch
-						const minSpan = 1e-12;
-						let nx0 = xMin,
-							nx1 = xMax,
-							ny0 = yMin,
-							ny1 = yMax;
-						if (zoomX) {
-							const x0 = xx - (xx - xMin) * (1 + dz);
-							const x1 = xx + (xMax - xx) * (1 + dz);
-							if (isFinite(x0) && isFinite(x1) && Math.abs(x1 - x0) > minSpan) {
-								nx0 = x0;
-								nx1 = x1;
-							}
-						}
-						if (zoomY) {
-							// For y2, use y2 range; otherwise normal
-							if (useY2 && plotlyInstance._fullLayout.yaxis2) {
-								const y2Min = Number(plotlyInstance._fullLayout.yaxis2.range[0]);
-								const y2Max = Number(plotlyInstance._fullLayout.yaxis2.range[1]);
-								const y0 = yy - (yy - y2Min) * (1 + dz);
-								const y1 = yy + (y2Max - yy) * (1 + dz);
-								if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
-									ny0 = y0;
-									ny1 = y1;
-								}
-							} else {
-								const y0 = yy - (yy - yMin) * (1 + dz);
-								const y1 = yy + (yMax - yy) * (1 + dz);
-								if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
-									ny0 = y0;
-									ny1 = y1;
-								}
-							}
-						}
-
-						if (yMarginZoom === 'left') {
-							plotlyLib.relayout(plotlyInstance, {
-								'yaxis.range': [ny0, ny1]
-							});
-						} else if (yMarginZoom === 'right') {
-							plotlyLib.relayout(plotlyInstance, {
-								'yaxis2.range': [ny0, ny1]
-							});
-						} else {
-							// Update only on changes to ensure stability
-							plotlyLib.relayout(plotlyInstance, {
-								'xaxis.range': [nx0, nx1],
-								'yaxis.range': [ny0, ny1]
-							});
-						}
-
-						// Sync time indicator on zoom/pan to prevent visual lag
-						const indicatorShape = getTimeIndicatorShape(
-							xField,
-							yFields,
-							$timeIndexStore.currentLine
-						);
-						if (!is3D && indicatorShape) {
-							plotlyLib.relayout(plotlyInstance, {
-								shapes: [indicatorShape]
-							});
-						}
-					}
-
-					el.addEventListener('wheel', wheelHandler, { passive: false });
-					return () => {
-						el.removeEventListener('wheel', wheelHandler);
-					};
-				});
-
-				if (!plotlyInstance || !chartMount) return;
-				const chartEl = chartMount;
-				const hoverHandler = (event: any) => {
-					if (event && event.points && event.points.length > 0) {
-						const pt = event.points[0];
-						const pointIndex =
-							typeof pt.pointIndex === 'number'
-								? pt.pointIndex
-								: typeof pt.pointNumber === 'number'
-									? pt.pointNumber
-									: null;
-						tooltipVisible = true;
-						const chartWidth = container?.clientWidth ?? 0;
-						tooltipFlipped = pt.xpx > chartWidth / 2;
-						tooltipX = tooltipFlipped ? pt.xpx - 16 : pt.xpx + 16;
-						tooltipY = pt.ypx;
-						tooltipXLabel = pt.xaxis.title.text ?? labelWithUnit(xField);
-						tooltipXValue = formatFieldValue(xField, typeof pt.x === 'number' ? pt.x : undefined, {
-							includeUnit: true
-						});
-						tooltipEntries = yFields.map((field, i) => ({
-							label: labelWithUnit(field),
-							value: formatFieldValue(
-								field,
-								pointIndex !== null && renderedSeries[field]
-									? renderedSeries[field][pointIndex]
-									: undefined,
-								{ includeUnit: true }
-							),
-							color: SERIES_COLORS[i % SERIES_COLORS.length]
-						}));
-					}
-				};
-				const unhoverHandler = () => {
-					tooltipVisible = false;
-				};
-				chartEl.addEventListener('plotly_hover', hoverHandler);
-				chartEl.addEventListener('plotly_unhover', unhoverHandler);
-				plotlyInstance._detachPlotlyTooltip = () => {
-					chartEl.removeEventListener('plotly_hover', hoverHandler);
-					chartEl.removeEventListener('plotly_unhover', unhoverHandler);
-				};
-			}
-
-			attachTooltipEvents();
 		} // End of 2D rendering path
 	});
 
@@ -1207,6 +960,201 @@
 		plotlyLib.relayout(plotlyInstance, {
 			shapes: indicatorShape ? [indicatorShape] : []
 		});
+	});
+
+	$effect(() => {
+		if (!browser || is3D || !chartMount || !plotlyInstance || !plotlyLib) return;
+		if (plotlyInstance._fullLayout) {
+			plotlyInstance._fullLayout.scrollZoom = false;
+		}
+
+		const el = chartMount;
+
+		function getCurrentRanges(): [number, number, number, number] {
+			const layout = plotlyInstance._fullLayout;
+			const arr = [
+				layout?.xaxis?.range?.[0],
+				layout?.xaxis?.range?.[1],
+				layout?.yaxis?.range?.[0],
+				layout?.yaxis?.range?.[1]
+			].map(Number);
+			if (arr.length !== 4 || arr.some((n) => !isFinite(n))) {
+				return [0, 1, 0, 1];
+			}
+			return arr as [number, number, number, number];
+		}
+
+		function pixelToData(x: number, y: number, yAxis: 'y' | 'y2' = 'y'): { xx: number; yy: number } {
+			const layout = plotlyInstance._fullLayout;
+			const w = el.clientWidth;
+			const h = el.clientHeight;
+			const [xMin, xMax, yMin, yMax] = getCurrentRanges();
+			const left = layout.margin?.l ?? 40;
+			const top = layout.margin?.t ?? 16;
+			const right = w - (layout.margin?.r ?? 40);
+			const bottom = h - (layout.margin?.b ?? 40);
+
+			const px = Math.max(left, Math.min(x, right));
+			const py = Math.max(top, Math.min(y, bottom));
+
+			const xPct = (px - left) / (right - left);
+			const xx = xMin + (xMax - xMin) * xPct;
+
+			if (yAxis === 'y2' && layout.yaxis2 && layout.yaxis2.range) {
+				const y2Min = Number(layout.yaxis2.range[0]);
+				const y2Max = Number(layout.yaxis2.range[1]);
+				const yPct = 1 - (py - top) / (bottom - top);
+				const yy = y2Min + (y2Max - y2Min) * yPct;
+				return { xx, yy };
+			}
+
+			const yPct = 1 - (py - top) / (bottom - top);
+			const yy = yMin + (yMax - yMin) * yPct;
+			return { xx, yy };
+		}
+
+		function wheelHandler(e: WheelEvent): void {
+			if (!(plotlyInstance && plotlyInstance._fullLayout)) return;
+			if (e.ctrlKey || e.metaKey) return;
+			e.preventDefault();
+			if (wheelFramePending) return;
+
+			wheelFramePending = true;
+			requestAnimationFrame(() => {
+				wheelFramePending = false;
+				if (!(plotlyInstance && plotlyInstance._fullLayout)) return;
+
+				let yMarginZoom: 'left' | 'right' | null = null;
+				let useY2 = false;
+				const [xMin, xMax, yMin, yMax] = getCurrentRanges();
+				let zoomX = true;
+				let zoomY = true;
+				const margin = 24;
+
+				if (e.shiftKey) {
+					const layout = plotlyInstance._fullLayout;
+					const rightMargin = el.clientWidth - (layout.margin?.r ?? 40);
+					const hasRightY = yFields.length > 1;
+					if (e.offsetY > el.clientHeight - margin) zoomY = false;
+					if (e.offsetX < margin) {
+						zoomX = false;
+						yMarginZoom = 'left';
+					}
+					if (hasRightY && e.offsetX > rightMargin) {
+						zoomX = false;
+						yMarginZoom = 'right';
+						useY2 = true;
+					}
+					if (!zoomX && !zoomY) return;
+				}
+
+				const { xx, yy } = useY2
+					? pixelToData(e.offsetX, e.offsetY, 'y2')
+					: pixelToData(e.offsetX, e.offsetY, 'y');
+
+				const dz = Math.sign(e.deltaY) * 0.1;
+				const minSpan = 1e-12;
+				let nx0 = xMin;
+				let nx1 = xMax;
+				let ny0 = yMin;
+				let ny1 = yMax;
+
+				if (zoomX) {
+					const x0 = xx - (xx - xMin) * (1 + dz);
+					const x1 = xx + (xMax - xx) * (1 + dz);
+					if (isFinite(x0) && isFinite(x1) && Math.abs(x1 - x0) > minSpan) {
+						nx0 = x0;
+						nx1 = x1;
+					}
+				}
+
+				if (zoomY) {
+					if (useY2 && plotlyInstance._fullLayout.yaxis2) {
+						const y2Min = Number(plotlyInstance._fullLayout.yaxis2.range[0]);
+						const y2Max = Number(plotlyInstance._fullLayout.yaxis2.range[1]);
+						const y0 = yy - (yy - y2Min) * (1 + dz);
+						const y1 = yy + (y2Max - yy) * (1 + dz);
+						if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
+							ny0 = y0;
+							ny1 = y1;
+						}
+					} else {
+						const y0 = yy - (yy - yMin) * (1 + dz);
+						const y1 = yy + (yMax - yy) * (1 + dz);
+						if (isFinite(y0) && isFinite(y1) && Math.abs(y1 - y0) > minSpan) {
+							ny0 = y0;
+							ny1 = y1;
+						}
+					}
+				}
+
+				const relayoutUpdate: Record<string, unknown> = {};
+				if (yMarginZoom === 'left') {
+					relayoutUpdate['yaxis.range'] = [ny0, ny1];
+				} else if (yMarginZoom === 'right') {
+					relayoutUpdate['yaxis2.range'] = [ny0, ny1];
+				} else {
+					relayoutUpdate['xaxis.range'] = [nx0, nx1];
+					relayoutUpdate['yaxis.range'] = [ny0, ny1];
+				}
+
+				const indicatorShape = getTimeIndicatorShape(xField, yFields, $timeIndexStore.currentLine);
+				relayoutUpdate.shapes = indicatorShape ? [indicatorShape] : [];
+				plotlyLib.relayout(plotlyInstance, relayoutUpdate);
+			});
+		}
+
+		el.addEventListener('wheel', wheelHandler, { passive: false });
+		return () => {
+			el.removeEventListener('wheel', wheelHandler);
+		};
+	});
+
+	$effect(() => {
+		if (!browser || is3D || !chartMount || !plotlyInstance) return;
+
+		const chartEl = chartMount;
+		const hoverHandler = (event: any) => {
+			if (event && event.points && event.points.length > 0) {
+				const pt = event.points[0];
+				const pointIndex =
+					typeof pt.pointIndex === 'number'
+						? pt.pointIndex
+						: typeof pt.pointNumber === 'number'
+							? pt.pointNumber
+							: null;
+				tooltipVisible = true;
+				const chartWidth = container?.clientWidth ?? 0;
+				tooltipFlipped = pt.xpx > chartWidth / 2;
+				tooltipX = tooltipFlipped ? pt.xpx - 16 : pt.xpx + 16;
+				tooltipY = pt.ypx;
+				tooltipXLabel = pt.xaxis.title.text ?? labelWithUnit(xField);
+				tooltipXValue = formatFieldValue(xField, typeof pt.x === 'number' ? pt.x : undefined, {
+					includeUnit: true
+				});
+				tooltipEntries = yFields.map((field, i) => ({
+					label: labelWithUnit(field),
+					value: formatFieldValue(
+						field,
+						pointIndex !== null && renderedSeries[field]
+							? renderedSeries[field][pointIndex]
+							: undefined,
+						{ includeUnit: true }
+					),
+					color: SERIES_COLORS[i % SERIES_COLORS.length]
+				}));
+			}
+		};
+		const unhoverHandler = () => {
+			tooltipVisible = false;
+		};
+
+		chartEl.addEventListener('plotly_hover', hoverHandler);
+		chartEl.addEventListener('plotly_unhover', unhoverHandler);
+		return () => {
+			chartEl.removeEventListener('plotly_hover', hoverHandler);
+			chartEl.removeEventListener('plotly_unhover', unhoverHandler);
+		};
 	});
 
 	// Main chart render (never depend on currentLine!
