@@ -1,173 +1,33 @@
-# AGENTS.md - Wazzu Racing Data Viewer
+# Repository Guidelines
 
-## Project Overview
+## Project Structure & Module Organization
 
-This repo is a SvelteKit-based data visualization platform for Wazzu Racing's 2026 FSAE car. It features an interactive, customizable pane layout for viewing telemetry and sensor data using graphs, maps, gauges, and other flexible visualization types.
+This repository is a SvelteKit 2 + Svelte 5 telemetry viewer. Application routes live in `src/routes`, shared UI in `src/lib/components`, widget implementations in `src/lib/components/widgets`, stores in `src/lib/stores`, and shared utilities such as parsing and layout helpers in `src/lib/*.ts`. Static assets belong in `static/`. Tests are kept under `src/tests/` with `unit`, `components`, and `e2e` coverage areas.
 
-**Tech Stack:**
+## Build, Test, and Development Commands
 
-- SvelteKit 2.x with Svelte 5 (runes-only syntax)
-- TypeScript (strict mode, explicit typing)
-- Tailwind CSS 4.x (utility-first responsive styling)
-- Vite 7.x (build tooling)
-- pnpm (package manager)
-- ESLint + Prettier (linting/format)
-- svelte-check for type validity
+- `pnpm dev`: start the local Vite dev server.
+- `pnpm build`: create the production build.
+- `pnpm preview`: serve the production build locally.
+- `pnpm check`: run `svelte-check` against `tsconfig.json`.
+- `pnpm lint`: run Prettier checks and ESLint.
+- `pnpm format`: apply Prettier formatting.
+- `pnpm test`: run Vitest suites.
+- `pnpm test:coverage`: run Vitest with coverage output.
+- `pnpm test:e2e`: run Playwright end-to-end tests.
 
-## Agentic Workflow: Svelte MCP & Context7 Usage
+## Coding Style & Naming Conventions
 
-Agents MUST use Svelte MCP server and Context7 MCP for reference—never general internet/Google. These provide up-to-date, authoritative documentation for:
+Use tabs, single quotes, no trailing commas, and a 100-character print width as defined in `.prettierrc`. Follow Svelte 5 runes-only patterns; do not introduce legacy syntax such as `export let` or reactive `$:` blocks. Use explicit TypeScript types, prefer `import type`, and keep imports grouped as external, `$lib`, then relative. Components use PascalCase filenames such as `PaneLayout.svelte`; utilities and stores use camelCase names such as `layoutUtils.ts` and `dataStore.ts`.
 
-- Svelte 5 runes (reactivity, component structure)
-- SvelteKit project structure, routing, build, and deployment
-- TypeScript strict usage, advanced typing, JSDoc
-- Tailwind CSS utility conventions
-- Vite configuration
-- Testing: vitest/unit, Playwright/e2e
-- ESLint/Prettier style enforcement
+## Testing Guidelines
 
-## Development Commands
+Vitest covers unit and component tests in `src/tests/**/*.test.ts`; Playwright specs live in `src/tests/e2e/*.spec.ts`. Add tests close to the feature area they validate and use descriptive names like `GraphWidget.test.ts`. Run `pnpm test` before opening a PR, and use `pnpm test:e2e` for UI or routing changes.
 
-| Command            | Description                           |
-| ------------------ | ------------------------------------- |
-| `pnpm dev`         | Start development server              |
-| `pnpm build`       | Build for production                  |
-| `pnpm preview`     | Preview production build              |
-| `pnpm check`       | Type check with svelte-check          |
-| `pnpm check:watch` | Watch mode for type checking          |
-| `pnpm lint`        | Run ESLint and Prettier checks        |
-| `pnpm format`      | Format code with Prettier             |
-| `pnpm test`        | Run all vitest tests (if implemented) |
-| `pnpm test <file>` | Run a single test file (vitest CLI)   |
+## Commit & Pull Request Guidelines
 
-**How to run a single unit test (when tests exist):**
+Recent history favors short, imperative commit subjects such as `Add units to all the fields.` and `Fix bug with stuff not rendering.` Keep commits focused and specific. Pull requests should summarize behavior changes, list verification steps (`pnpm lint`, `pnpm check`, `pnpm test`), link the related issue when available, and include screenshots or short recordings for UI changes.
 
-```bash
-pnpm test src/lib/some-feature.test.ts
-```
+## Agent-Specific Notes
 
-(Uses vitest CLI syntax; see Context7 MCP for advanced vitest docs.)
-
-**If adding tests:**
-
-- Use vitest for unit tests (`.test.ts` in `src`, organized by feature/component).
-- Use Playwright for e2e tests (`tests/` folder).
-- Reference Context7 MCP for test structure and advanced testing guidelines.
-
-## Code Style Guidelines
-
-### Imports & Grouping
-
-- Use `$lib` alias: `import { foo } from '$lib/bar'`
-- Use `$app/environment` for environment checks
-- Group imports: external → $lib → relative
-
-### TypeScript
-
-- Strict mode: no implicit `any`, always explicit types
-- Use **type imports**: `import type { Foo } from '$lib/types'`
-- Place shared types in `src/lib/types.ts`, utilities in `src/lib/*.ts`
-- Document complex types with JSDoc (`/** ... */`)
-
-### Svelte 5 Runes (Exclusive)
-
-- **Do NOT use old Svelte syntax** (e.g., `export let`, `$:`)
-- Use ONLY runes:
-  - `$state()`: Reactive state
-  - `$derived()`: Computed values
-  - `$effect()`: Side effects (not pure computation)
-  - `$props()`: Component props typing/handling
-  - `$bindable()`: Props with 2-way binding
-- Prefer destructuring props: `let { propA, propB } = $props();`
-- Use keyed each blocks: `{#each items as item (item.id)}`
-- Use snippets/context: `{#snippet ...}` and `createContext` for shared state
-- Use event attributes (e.g., `onclick`), not legacy event directives
-
-### File Organization
-
-```
-src/lib/components/   # Svelte components (PascalCase)
-src/lib/stores/       # Svelte reactive stores
-src/lib/types.ts      # Shared types
-src/lib/*.ts          # Utility functions (camelCase)
-src/routes/           # SvelteKit routes
-static/               # Assets
-tests/                # Playwright e2e tests
-```
-
-### Styling
-
-- Use Tailwind CSS utility classes only; avoid inline styles unless necessary
-- Mobile-first, responsive by default
-- Import Tailwind via `@import 'tailwindcss'` in app.css
-
-### Naming Conventions
-
-| Type           | Convention       | Example                       |
-| -------------- | ---------------- | ----------------------------- |
-| Components     | PascalCase       | `Graph.svelte`                |
-| Files          | camelCase        | `layoutUtils.ts`              |
-| Types          | PascalCase       | `DataLine`, `LayoutNode`      |
-| Vars/functions | camelCase        | `processData`, `handleResize` |
-| Constants      | UPPER_SNAKE_CASE | `MAX_ZOOM`                    |
-| Svelte props   | camelCase        | `onClose`                     |
-
-### Error Handling
-
-- Use try/catch with meaningful error messages
-- Defensive: guard browser-only code (`import { browser } from '$app/environment'; if (browser) ...`)
-- Log errors with context for debugging
-
-### Component Patterns
-
-- Export callbacks as props (e.g., `onClose`, `onUpdate`, `onDataReceived`)
-- Use `$bindable()` for two-way binding
-- Clean up event listeners and chart instances properly
-- Type all component props strictly
-
-## Linting & Formatting
-
-### Prettier (.prettierrc)
-
-- Tabs, single quotes, no trailing commas, max width 100
-
-### ESLint
-
-- Extends: `@eslint/js`, `typescript-eslint/recommended`, `eslint-plugin-svelte/recommended`
-- Integrates with `eslint-config-prettier`
-- `no-undef` disabled (TypeScript handles this)
-
-**Before commit, run:**
-
-```bash
-pnpm lint && pnpm check && pnpm format
-```
-
-**Always run `svelte-autofixer` and reference Svelte MCP docs before PRs.**
-
-## Agent/Copilot Rules (Merged)
-
-- Reference Context7 for advanced TypeScript, Tailwind, Vite, and vitest features/tests.
-- Use JSDoc for complex type definitions.
-- Cleanup all side effects and event listeners in Svelte components.
-- Defensive browser checks (`browser` from `$app/environment`).
-- Ensure data structures match shared types (`DataLine`, etc.).
-- Document all non-trivial functions and types with JSDoc.
-- Do not edit `README.md`; put docs in `docs/` folder only.
-- Use Svelte MCP and Context7 for organization, test, and migration workflows.
-
-## Important Notes
-
-1. SvelteKit is configured with `@sveltejs/adapter-static` for static site generation
-2. Svelte 5 runes exclusively; migrate old code using MCP migration tools
-3. All documentation in markdown goes in `docs/`; never in README.md
-4. Use Svelte MCP tools: `list-sections`, `get-documentation`, `svelte-autofixer`
-5. Refer to Context7 MCP for library docs (Tailwind, TypeScript, vitest, etc.)
-6. Organize files strictly—no types or utilities in routes.
-7. Agents: always verify correctness using MCP checkers before commit or PR.
-
----
-
-**For detailed code snippets or agent workflow examples, reference Svelte MCP and Context7 MCP documentation directly.**
-
----
+Use Svelte MCP and Context7 references when available for Svelte, SvelteKit, TypeScript, Tailwind, and testing guidance. Prefer browser guards for client-only code, clean up listeners and chart instances, and keep documentation changes in `docs/` rather than `README.md`.
