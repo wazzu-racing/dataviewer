@@ -7,8 +7,7 @@ import path from 'path';
 test.describe('App — smoke tests', () => {
 	test('page loads with correct title', async ({ page }) => {
 		await page.goto('/');
-		// App should load without errors
-		await expect(page).toHaveTitle(/dataviewer|Wazzu|FSAE/i);
+		await expect(page).toHaveTitle('Wazzu Racing Data Viewer');
 	});
 
 	test('toolbar renders 5 widget buttons', async ({ page }) => {
