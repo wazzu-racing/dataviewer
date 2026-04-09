@@ -6,8 +6,8 @@ import { dataStore, type DataState } from '$lib/stores/dataStore';
 import { selectedIndex, setIndex } from '$lib/stores/time';
 import type { DataLine } from '$lib/types';
 
-const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBounds, mockRenderer } = vi.hoisted(
-	() => {
+const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBounds, mockRenderer } =
+	vi.hoisted(() => {
 		const mockBounds = { isValid: () => true };
 		const mockRenderer = {};
 		const mockPolyline = {
@@ -39,9 +39,16 @@ const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBound
 			latLngBounds: vi.fn().mockReturnValue(mockBounds),
 			canvas: vi.fn().mockReturnValue(mockRenderer)
 		};
-		return { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBounds, mockRenderer };
-	}
-);
+		return {
+			mockL,
+			mockMap,
+			mockPolyline,
+			mockCircleMarker,
+			mockTileLayer,
+			mockBounds,
+			mockRenderer
+		};
+	});
 
 vi.mock('$lib/leaflet', () => ({ loadLeaflet: async () => mockL }));
 vi.mock('$app/environment', async (importOriginal) => {
@@ -282,9 +289,7 @@ describe('MapWidget', () => {
 		setIndex(2);
 
 		await waitFor(() => {
-			expect(mockCircleMarker.setLatLng).toHaveBeenCalledWith(
-				[46.75, -117.3]
-			);
+			expect(mockCircleMarker.setLatLng).toHaveBeenCalledWith([46.75, -117.3]);
 		});
 	});
 
@@ -353,7 +358,9 @@ describe('MapWidget', () => {
 			expect(mockPolyline.on).toHaveBeenCalledWith('click', expect.any(Function));
 		});
 
-		const clickHandler = mockPolyline.on.mock.calls.find(([eventName]) => eventName === 'click')?.[1];
+		const clickHandler = mockPolyline.on.mock.calls.find(
+			([eventName]) => eventName === 'click'
+		)?.[1];
 		expect(clickHandler).toBeTypeOf('function');
 
 		clickHandler({
