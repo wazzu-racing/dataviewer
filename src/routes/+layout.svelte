@@ -12,6 +12,7 @@
 </script>
 
 <svelte:head>
+	<title>Wazzu Racing Data Viewer</title>
 	<link rel="icon" href={favicon} />
 	<link rel="manifest" href="{base}/manifest.webmanifest" />
 </svelte:head>

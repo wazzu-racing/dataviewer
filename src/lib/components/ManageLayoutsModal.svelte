@@ -92,7 +92,7 @@
 				<div class="text-center py-8 text-gray-500 dark:text-gray-400">
 					<p class="text-lg mb-2">No saved layouts</p>
 					<p class="text-sm">
-						Save your first layout using the "Save Layout" button in the top bar
+						Save your first layout from the command palette
 					</p>
 				</div>
 			{:else}
