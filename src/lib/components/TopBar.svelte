@@ -35,7 +35,7 @@
 	</button>
 
 	<div class="justify-self-end">
-		<span class="text-lg font-bold uppercase tracking-wide text-white dark:text-neutral-100">
+		<span class="text-lg font-bold uppercase tracking-wide text-primary-950 dark:text-neutral-100">
 			Wazzu Racing
 		</span>
 	</div>
