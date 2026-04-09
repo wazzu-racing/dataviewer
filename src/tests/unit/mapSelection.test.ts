@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findNearestTelemetryIndex } from '$lib/mapSelection';
+import { findNearestTelemetryIndex, findNearestTrackSampleByTelemetryIndex } from '$lib/mapSelection';
 
 describe('findNearestTelemetryIndex', () => {
 	it('returns null when there are no samples', () => {
@@ -23,5 +23,24 @@ describe('findNearestTelemetryIndex', () => {
 		];
 
 		expect(findNearestTelemetryIndex(samples, 46.7499, -117.3001)).toBe(4);
+	});
+});
+
+describe('findNearestTrackSampleByTelemetryIndex', () => {
+	it('returns null when there are no samples', () => {
+		expect(findNearestTrackSampleByTelemetryIndex([], 5)).toBeNull();
+	});
+
+	it('returns the nearest valid GPS sample for a telemetry index', () => {
+		const samples = [
+			{ telemetryIndex: 3, lat: 46.73, lon: -117.28 },
+			{ telemetryIndex: 7, lat: 46.74, lon: -117.29 },
+			{ telemetryIndex: 11, lat: 46.75, lon: -117.3 }
+		];
+
+		expect(findNearestTrackSampleByTelemetryIndex(samples, 0)).toEqual(samples[0]);
+		expect(findNearestTrackSampleByTelemetryIndex(samples, 7)).toEqual(samples[1]);
+		expect(findNearestTrackSampleByTelemetryIndex(samples, 9)).toEqual(samples[1]);
+		expect(findNearestTrackSampleByTelemetryIndex(samples, 20)).toEqual(samples[2]);
 	});
 });

@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 	import { formatLabelWithUnit, isNumericField } from '$lib/fieldMetadata';
 	import { loadLeaflet } from '$lib/leaflet';
-	import { findNearestTelemetryIndex } from '$lib/mapSelection';
+	import { findNearestTelemetryIndex, findNearestTrackSampleByTelemetryIndex } from '$lib/mapSelection';
 	import { dataStore } from '$lib/stores/dataStore';
 	import { setIndex, timeIndexStore } from '$lib/stores/time';
 	import { NUMERIC_FIELDS, type MapConfig, type NumericField } from '$lib/types';
@@ -85,6 +85,10 @@
 		)
 	);
 
+	const currentTrackSample = $derived.by(() =>
+		findNearestTrackSampleByTelemetryIndex(trackSamples, $timeIndexStore.selectedIndex)
+	);
+
 	const colorDomain = $derived.by(() => {
 		const values = trackPoints
 			.map((point) => point.value)
@@ -150,6 +154,12 @@
 			leafletMap.removeLayer(endMarker);
 			endMarker = null;
 		}
+	}
+
+	function clearTimeMarker() {
+		if (!leafletMap || !timeMarker) return;
+		leafletMap.removeLayer(timeMarker);
+		timeMarker = null;
 	}
 
 	function normalizeValue(value: number, min: number, max: number): number {
@@ -282,6 +292,11 @@
 				attribution: '© OpenStreetMap contributors',
 				maxZoom: 19
 			}).addTo(leafletMap);
+			leafletMap.createPane('current-position-pane');
+			const currentPositionPane = leafletMap.getPane('current-position-pane');
+			if (currentPositionPane) {
+				currentPositionPane.style.zIndex = '650';
+			}
 			mapContainer!.style.overflow = 'hidden';
 			mapContainer!.style.position = 'relative';
 		});
@@ -394,45 +409,33 @@
 
 	$effect(() => {
 		if (!browser || !leafletMap || !hasData) {
-			if (timeMarker) {
-				leafletMap?.removeLayer(timeMarker);
-				timeMarker = null;
-			}
+			clearTimeMarker();
+			return;
+		}
+
+		const sample = currentTrackSample;
+		if (!sample) {
+			clearTimeMarker();
+			return;
+		}
+
+		if (timeMarker) {
+			timeMarker.setLatLng([sample.lat, sample.lon]);
 			return;
 		}
 
 		let cancelled = false;
 
 		loadLeaflet().then((L) => {
-			if (cancelled || !leafletMap) return;
+			if (cancelled || !leafletMap || timeMarker) return;
 
-			const idx = $timeIndexStore.selectedIndex;
-			const line = $dataStore.telemetry[idx];
-			if (
-				!line ||
-				typeof line.lat !== 'number' ||
-				typeof line.lon !== 'number' ||
-				line.lat === 0 ||
-				line.lon === 0
-			) {
-				if (timeMarker) {
-					leafletMap.removeLayer(timeMarker);
-					timeMarker = null;
-				}
-				return;
-			}
-
-			if (timeMarker) {
-				leafletMap.removeLayer(timeMarker);
-				timeMarker = null;
-			}
-
-			timeMarker = L.circleMarker([line.lat, line.lon], {
-				radius: 9,
+			timeMarker = L.circleMarker([sample.lat, sample.lon], {
+				radius: 5,
 				color: BRAND_ACCENT,
 				fillColor: BRAND_ACCENT,
-				fillOpacity: 0.85,
-				weight: 4
+				fillOpacity: 1,
+				weight: 1.5,
+				pane: 'current-position-pane'
 			}).addTo(leafletMap);
 		});
 

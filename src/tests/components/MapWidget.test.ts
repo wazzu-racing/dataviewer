@@ -18,13 +18,16 @@ const { mockL, mockMap, mockPolyline, mockCircleMarker, mockTileLayer, mockBound
 		};
 		const mockCircleMarker = {
 			addTo: vi.fn().mockReturnThis(),
-			bindTooltip: vi.fn().mockReturnThis()
+			bindTooltip: vi.fn().mockReturnThis(),
+			setLatLng: vi.fn().mockReturnThis()
 		};
 		const mockTileLayer = { addTo: vi.fn().mockReturnThis() };
 		const mockMap = {
 			setView: vi.fn().mockReturnThis(),
 			fitBounds: vi.fn().mockReturnThis(),
 			invalidateSize: vi.fn(),
+			createPane: vi.fn(),
+			getPane: vi.fn().mockReturnValue({ style: {} }),
 			removeLayer: vi.fn(),
 			remove: vi.fn()
 		};
@@ -129,6 +132,7 @@ describe('MapWidget', () => {
 		mockPolyline.on.mockReturnThis();
 		mockCircleMarker.addTo.mockReturnThis();
 		mockCircleMarker.bindTooltip.mockReturnThis();
+		mockCircleMarker.setLatLng.mockReturnThis();
 		mockTileLayer.addTo.mockReturnThis();
 	});
 
@@ -230,6 +234,58 @@ describe('MapWidget', () => {
 			[46.75, -117.3],
 			expect.objectContaining({ color: '#dc2626' })
 		);
+	});
+
+	it('places the current-position dot at the nearest valid GPS sample for the selected time', async () => {
+		syncTelemetry([
+			makeDataLine({ lat: 46.73, lon: -117.28, ground_speed: 10 }),
+			makeDataLine({ lat: 0, lon: 0, ground_speed: 15 }),
+			makeDataLine({ lat: 0, lon: 0, ground_speed: 20 }),
+			makeDataLine({ lat: 46.75, lon: -117.3, ground_speed: 30 })
+		]);
+		setIndex(2);
+
+		render(MapWidget);
+
+		await waitFor(() => {
+			expect(mockL.circleMarker).toHaveBeenCalledTimes(3);
+		});
+
+		expect(mockL.circleMarker).toHaveBeenNthCalledWith(
+			3,
+			[46.75, -117.3],
+			expect.objectContaining({
+				radius: 5,
+				pane: 'current-position-pane',
+				color: '#a60f2d'
+			})
+		);
+	});
+
+	it('moves the current-position dot when the selected time changes', async () => {
+		syncTelemetry([
+			makeDataLine({ lat: 46.73, lon: -117.28, ground_speed: 10 }),
+			makeDataLine({ lat: 46.74, lon: -117.29, ground_speed: 20 }),
+			makeDataLine({ lat: 46.75, lon: -117.3, ground_speed: 30 })
+		]);
+		setIndex(0);
+
+		render(MapWidget);
+
+		await waitFor(() => {
+			expect(mockL.circleMarker).toHaveBeenCalledWith(
+				[46.73, -117.28],
+				expect.objectContaining({ pane: 'current-position-pane' })
+			);
+		});
+
+		setIndex(2);
+
+		await waitFor(() => {
+			expect(mockCircleMarker.setLatLng).toHaveBeenCalledWith(
+				[46.75, -117.3]
+			);
+		});
 	});
 
 	it('filters out rows where lat=0 or lon=0 before drawing segments', async () => {
