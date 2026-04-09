@@ -6,7 +6,7 @@
 	let { onOpenCommands }: Props = $props();
 </script>
 
-<!-- TopBar: fixed height + all styling, accepts parent classes via $attributes -->
+<!-- TopBar: fixed height + all styling -->
 <div
 	class="grid h-16 w-full grid-cols-[1fr_auto_1fr] items-center bg-primary px-6 shadow-card select-none dark:border-b dark:border-neutral-800 dark:bg-neutral-900"
 >
@@ -16,7 +16,6 @@
 		class="flex items-center gap-2 rounded-md border border-primary/20 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
 		onclick={onOpenCommands}
 		title="Open Command Palette (Ctrl+Shift+P)"
-		aria-label="Open command palette"
 	>
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
