@@ -353,6 +353,18 @@
 	let yDropdownOpen = $state(false);
 	let zDropdownOpen = $state(false);
 
+	function handleWindowClick(event: MouseEvent) {
+		if (!yDropdownOpen && !zDropdownOpen) {
+			return;
+		}
+
+		const target = event.target as HTMLElement | null;
+		if (!target?.closest('.graph-series-dropdown')) {
+			yDropdownOpen = false;
+			zDropdownOpen = false;
+		}
+	}
+
 	function toggleYField(field: NumericField) {
 		if (yFields.includes(field)) {
 			// Don't remove the last field
@@ -1206,6 +1218,8 @@
 	}
 </script>
 
+<svelte:window onclick={handleWindowClick} />
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="flex h-full w-full flex-col overflow-hidden rounded-xl shadow-md bg-white dark:bg-neutral-900 ring-1 ring-primary/15 focus-within:ring-2 focus-within:ring-primary"
@@ -1232,7 +1246,7 @@
 
 		<!-- Y series multi-select dropdown -->
 		<div
-			class="relative flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
+			class="graph-series-dropdown relative flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
 		>
 			<span>Y</span>
 			<div class="relative">
@@ -1287,7 +1301,7 @@
 		<!-- Z series multi-select dropdown — only shown in 3D mode -->
 		{#if is3D}
 			<div
-				class="relative flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
+				class="graph-series-dropdown relative flex items-center gap-1 text-xs text-primary-700 dark:text-neutral-300 font-semibold"
 			>
 				<span>Z</span>
 				<div class="relative">

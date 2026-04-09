@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
 import { data as globalData } from '$lib/data.svelte';
+import { dataStore } from '$lib/stores/dataStore';
 import type { DataLine, GraphConfig } from '$lib/types';
 
 // ---------------------------------------------------------------------------
@@ -37,9 +38,17 @@ vi.mock('uplot', () => ({
 
 // Mock uPlot CSS import
 vi.mock('uplot/dist/uPlot.min.css', () => ({}));
+const mockPlotlyReact = vi.fn();
+const mockPlotlyRelayout = vi.fn();
+vi.mock('plotly.js-dist-min', () => ({
+	default: {
+		react: mockPlotlyReact,
+		relayout: mockPlotlyRelayout
+	}
+}));
 
 // Mock $app/environment to report browser = true
-vi.mock('$app/environment', () => ({ browser: true }));
+vi.mock('$app/environment', () => ({ browser: true, dev: false }));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,12 +114,16 @@ function makeDataLine(overrides: Partial<DataLine> = {}): DataLine {
 describe('GraphWidget', () => {
 	beforeEach(() => {
 		globalData.lines = [];
+		dataStore.set({ telemetry: [], widgets: [] });
 		mockConstructorCalls.length = 0;
+		mockPlotlyReact.mockClear();
+		mockPlotlyRelayout.mockClear();
 		vi.clearAllMocks();
 	});
 
 	afterEach(() => {
 		globalData.lines = [];
+		dataStore.set({ telemetry: [], widgets: [] });
 	});
 
 	it('renders the X axis selector dropdown', () => {
@@ -149,22 +162,53 @@ describe('GraphWidget', () => {
 	it('shows Y dropdown button with single field name when 1 series', () => {
 		const config: GraphConfig = { xField: 'time', yFields: ['rpm'] };
 		const { container } = render(GraphWidget, { props: { config } });
-		// The Y button contains a <span class="... text-stone-700"> with the label
-		// Use a targeted query so we don't accidentally match the <option> in the X select
-		const yBtn = container.querySelector('button[class*="border-stone-300"]');
+		const yBtn = container.querySelector('.graph-series-dropdown button');
 		expect(yBtn).toBeTruthy();
-		const labelSpan = yBtn!.querySelector('span.text-stone-700');
-		expect(labelSpan?.textContent?.trim()).toBe('Rpm');
+		expect(yBtn?.textContent).toContain('RPM');
 	});
 
 	it('opens Y dropdown when Y button is clicked', async () => {
 		const { container } = render(GraphWidget);
-		// The Y dropdown toggle button contains the arrow glyph ▾
-		const yBtn = container.querySelector('button[class*="border-stone-300"]') as HTMLButtonElement;
+		const yBtn = container.querySelector('.graph-series-dropdown button') as HTMLButtonElement;
 		await fireEvent.click(yBtn);
 		// Should now show a scrollable list
 		const dropdown = container.querySelector('.max-h-64');
 		expect(dropdown).toBeTruthy();
+	});
+
+	it('closes the Y dropdown when clicking outside it', async () => {
+		const { container } = render(GraphWidget);
+		const yBtn = container.querySelector('.graph-series-dropdown button') as HTMLButtonElement;
+
+		await fireEvent.click(yBtn);
+		expect(container.querySelector('.max-h-64')).toBeTruthy();
+
+		await fireEvent.click(document.body);
+
+		await waitFor(() => {
+			expect(container.querySelector('.max-h-64')).toBeNull();
+		});
+	});
+
+	it('closes the Z dropdown when clicking outside it in 3D mode', async () => {
+		const config: GraphConfig = {
+			xField: 'time',
+			yFields: ['rpm'],
+			is3D: true,
+			zFields: ['tps']
+		};
+		const { container } = render(GraphWidget, { props: { config } });
+		const buttons = container.querySelectorAll('.graph-series-dropdown button');
+		const zBtn = buttons[1] as HTMLButtonElement;
+
+		await fireEvent.click(zBtn);
+		expect(container.querySelectorAll('.max-h-64')).toHaveLength(1);
+
+		await fireEvent.click(document.body);
+
+		await waitFor(() => {
+			expect(container.querySelector('.max-h-64')).toBeNull();
+		});
 	});
 
 	it('does not fire onConfigChange on initial mount', async () => {
@@ -191,6 +235,7 @@ describe('GraphWidget', () => {
 
 	it('shows row count when data is loaded', () => {
 		globalData.lines = [makeDataLine(), makeDataLine()];
+		dataStore.set({ telemetry: [makeDataLine(), makeDataLine()], widgets: [] });
 		const { getByText } = render(GraphWidget);
 		expect(getByText('2 pts')).toBeTruthy();
 	});
@@ -202,16 +247,17 @@ describe('GraphWidget', () => {
 // so we assert on the rendered output instead.
 // ---------------------------------------------------------------------------
 describe('GraphWidget — buildData output format', () => {
-	it('renders a uPlot chart element when data is loaded', async () => {
+	it('renders the chart mount area when data is loaded', () => {
 		globalData.lines = [makeDataLine({ time: 1, rpm: 3000 }), makeDataLine({ time: 2, rpm: 4500 })];
-		const { container } = render(GraphWidget, {
+		dataStore.set({
+			telemetry: [makeDataLine({ time: 1, rpm: 3000 }), makeDataLine({ time: 2, rpm: 4500 })],
+			widgets: []
+		});
+		const { container, queryByText } = render(GraphWidget, {
 			props: { config: { xField: 'time', yFields: ['rpm'] } }
 		});
 
-		// uPlot renders a div with class "uplot" when it successfully mounts.
-		// Wait for the async $effect → dynamic import → new uPlot() sequence.
-		await waitFor(() => {
-			expect(container.querySelector('.uplot')).not.toBeNull();
-		});
+		expect(container.querySelector('.absolute.inset-0')).not.toBeNull();
+		expect(queryByText(/No data loaded/)).toBeNull();
 	});
 });
