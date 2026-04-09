@@ -757,12 +757,6 @@
 
 <div class="flex flex-col w-full flex-1 min-h-0 overflow-hidden bg-stone-100">
 	<TopBar
-		openChildWindow={() => createChildWindow()}
-		{layouts}
-		currentLayoutId={activeLayoutId}
-		onLayoutSelect={handleLoadLayout}
-		onSaveLayout={handleSaveLayoutClick}
-		onManageLayouts={handleManageLayoutsClick}
 		onOpenCommands={() => (showCommandPalette = true)}
 	/>
 	<div class="flex flex-1 overflow-hidden">
