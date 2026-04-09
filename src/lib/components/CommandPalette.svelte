@@ -208,7 +208,7 @@
 						<button
 							class="w-full flex items-center justify-between px-4 py-3 rounded-lg text-left transition-colors {i ===
 							selectedIndex
-								? 'bg-primary text-white'
+								? 'bg-primary/10 text-primary-950 dark:bg-primary dark:text-white'
 								: 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'}"
 							onclick={() => handleAction(cmd)}
 							onmouseenter={() => (selectedIndex = i)}
@@ -217,7 +217,9 @@
 								<span class="font-medium">{cmd.label}</span>
 								{#if cmd.description}
 									<span
-										class="text-xs {i === selectedIndex ? 'text-white/80' : 'text-neutral-500'}"
+										class="text-xs {i === selectedIndex
+											? 'text-primary-700 dark:text-white/80'
+											: 'text-neutral-500'}"
 									>
 										{cmd.description}
 									</span>
@@ -227,7 +229,9 @@
 								{#if cmd.children && cmd.children.length > 0}
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										class="w-4 h-4 {i === selectedIndex ? 'text-white/60' : 'text-neutral-400'}"
+										class="w-4 h-4 {i === selectedIndex
+											? 'text-primary-700 dark:text-white/60'
+											: 'text-neutral-400'}"
 										viewBox="0 0 24 24"
 										fill="none"
 										stroke="currentColor"
@@ -240,7 +244,7 @@
 									<span
 										class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border {i ===
 										selectedIndex
-											? 'border-white/40 bg-white/20 text-white'
+											? 'border-primary/20 bg-white/70 text-primary-900 dark:border-white/40 dark:bg-white/20 dark:text-white'
 											: 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-neutral-400'} font-mono"
 									>
 										{cmd.shortcut}
