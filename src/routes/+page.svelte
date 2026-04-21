@@ -138,6 +138,7 @@
 	}
 
 	async function readDataFromSerial(port: SerialPort) {
+		// TRANSMITTER VERIFIED: 9600 baud, 192-byte frames, 3 newlines (\n\n\n = [10, 10, 10])
 		await port.open({ baudRate: 9600 });
 		serialReadActive = true;
 
@@ -154,8 +155,11 @@
 						serialBuffer = result.remainder;
 
 						const nextLines = result.lines.filter((line) => {
-							if (lastLiveWriteMillis !== null && line.write_millis <= lastLiveWriteMillis) {
-								return false;
+							if (lastLiveWriteMillis !== null) {
+								// Standard deduplication: strictly increasing millis
+								if (line.write_millis <= lastLiveWriteMillis) {
+									return false;
+								}
 							}
 							lastLiveWriteMillis = line.write_millis;
 							return true;

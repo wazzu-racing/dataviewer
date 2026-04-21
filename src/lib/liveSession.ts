@@ -1,4 +1,4 @@
-import { data as globalData } from '$lib/data.svelte';
+import { data as globalData, syncToLegacy } from '$lib/data.svelte';
 import { dataStore } from '$lib/stores/dataStore';
 import { setIndex } from '$lib/stores/time';
 import type { DataLine, SessionMetadata } from '$lib/types';
@@ -23,10 +23,7 @@ function createSessionMetadata(overrides: SessionMetadataOverrides = {}): Sessio
 
 function syncTelemetry(telemetry: DataLine[]) {
 	globalData.lines = telemetry;
-	dataStore.update((old) => ({
-		...old,
-		telemetry
-	}));
+	syncToLegacy();
 }
 
 export function replaceSession(

@@ -1,4 +1,4 @@
-import { parseDataLine } from '$lib/dataParser';
+import { isValidDataLine, parseDataLine } from '$lib/dataParser';
 import { NUM_FIELDS, type DataLine } from '$lib/types';
 
 export const LIVE_FRAME_DELIMITER = [10, 10, 10] as const;
@@ -23,20 +23,6 @@ function findDelimiterIndex(buffer: number[]): number {
 	return -1;
 }
 
-function parseFrameBytes(frame: number[]): DataLine | null {
-	if (frame.length < LIVE_FRAME_BYTES) return null;
-
-	const rowBytes = frame.slice(-LIVE_FRAME_BYTES);
-	const dataview = new DataView(Uint8Array.from(rowBytes).buffer);
-	const row: number[] = [];
-
-	for (let i = 0; i < NUM_FIELDS; i++) {
-		row.push(dataview.getInt32(i * 4, true));
-	}
-
-	return parseDataLine(row);
-}
-
 export function consumeLiveSerialBytes(
 	buffer: number[],
 	chunk: Uint8Array | number[]
@@ -44,20 +30,59 @@ export function consumeLiveSerialBytes(
 	const nextBuffer = [...buffer, ...Array.from(chunk)];
 	const lines: DataLine[] = [];
 
-	let delimiterIndex = findDelimiterIndex(nextBuffer);
-	while (delimiterIndex !== -1) {
-		const frame = nextBuffer.slice(0, delimiterIndex);
-		const line = parseFrameBytes(frame);
-		if (line) {
-			lines.push(line);
+	let remainingBuffer = nextBuffer;
+	while (true) {
+		const relativeDelimiterIndex = findDelimiterIndex(remainingBuffer);
+		if (relativeDelimiterIndex === -1) break;
+
+		let foundValidFrame = false;
+
+		if (relativeDelimiterIndex >= LIVE_FRAME_BYTES) {
+			const frameStart = relativeDelimiterIndex - LIVE_FRAME_BYTES;
+			const frame = remainingBuffer.slice(frameStart, relativeDelimiterIndex);
+			const row: number[] = [];
+			const arrayBuffer = new Uint8Array(frame).buffer;
+			const dataview = new DataView(arrayBuffer);
+			for (let i = 0; i < NUM_FIELDS; i++) {
+				row.push(dataview.getInt32(i * 4, true));
+			}
+
+			if (isValidDataLine(row)) {
+				const line = parseDataLine(row);
+				lines.push(line);
+				remainingBuffer = remainingBuffer.slice(
+					relativeDelimiterIndex + LIVE_FRAME_DELIMITER.length
+				);
+				foundValidFrame = true;
+			}
 		}
 
-		nextBuffer.splice(0, delimiterIndex + LIVE_FRAME_DELIMITER.length);
-		delimiterIndex = findDelimiterIndex(nextBuffer);
+		if (!foundValidFrame) {
+			// If we found a delimiter but no valid frame, check if there's another delimiter.
+			const nextDelimIndex = findDelimiterIndex(remainingBuffer.slice(relativeDelimiterIndex + 1));
+			if (nextDelimIndex !== -1) {
+				remainingBuffer = remainingBuffer.slice(relativeDelimiterIndex + 1);
+				continue;
+			}
+
+			// If NO later delimiter, we decide whether to wait or skip.
+			// If the buffer is large enough for a frame (195), we skip THIS delimiter.
+			// This ensures we eventually find the "next" delimiter in the next chunk.
+			if (remainingBuffer.length >= 195) {
+				remainingBuffer = remainingBuffer.slice(relativeDelimiterIndex + 1);
+			} else {
+				break;
+			}
+		}
+	}
+
+	let finalBuffer = remainingBuffer;
+	if (finalBuffer.length > 2048) {
+		finalBuffer = finalBuffer.slice(-2048);
 	}
 
 	return {
 		lines,
-		remainder: nextBuffer
+		remainder: finalBuffer
 	};
 }
