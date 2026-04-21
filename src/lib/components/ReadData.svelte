@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseBinaryBuffer } from '$lib/dataParser';
-	import { dataStore } from '$lib/stores/dataStore';
 	import { loadWazzuFile } from '$lib/fileFormat';
+	import { replaceSession } from '$lib/liveSession';
 
 	let { onDismiss }: { onDismiss?: () => void } = $props();
 
@@ -18,12 +18,7 @@
 		if (f.name.endsWith('.wazzuracing')) {
 			try {
 				const { telemetry, metadata } = await loadWazzuFile(buffer);
-				globalData.lines = telemetry;
-				globalData.metadata = metadata;
-				dataStore.update((old) => ({
-					...old,
-					telemetry: globalData.lines
-				}));
+				replaceSession(telemetry, metadata);
 			} catch (err: any) {
 				parseError = `Error parsing .wazzuracing file: ${err.message}`;
 			}
@@ -34,13 +29,10 @@
 
 	export async function parse(buffer: ArrayBuffer) {
 		try {
-			globalData.lines = parseBinaryBuffer(buffer);
-
-			// Synchronize telemetry to shared dataStore!
-			dataStore.update((old) => ({
-				...old,
-				telemetry: globalData.lines
-			}));
+			replaceSession(parseBinaryBuffer(buffer), {
+				...globalData.metadata,
+				files: { ...globalData.metadata.files }
+			});
 		} catch (err: any) {
 			parseError = `Corrupted data — file may be truncated or malformed: ${err.message}`;
 		}

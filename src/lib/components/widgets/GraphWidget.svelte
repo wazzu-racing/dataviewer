@@ -606,36 +606,10 @@
 	$effect(() => {
 		const darkMode = isDarkMode;
 
-		if (dev) {
-			console.log(
-				'[GraphWidget effect] browser:',
-				browser,
-				'plotlyLib:',
-				plotlyLib,
-				'chartMount:',
-				chartMount,
-				'telemetry:',
-				$dataStore.telemetry.length,
-				'x:',
-				xField,
-				'y:',
-				yFields,
-				'z:',
-				zFields,
-				'is3D:',
-				is3D,
-				'mode3D:',
-				mode3D,
-				'darkMode:',
-				darkMode
-			);
-		}
 		if (!browser) return;
 		if (!plotlyLib) return;
 		if (!chartMount) return;
 		if (!$dataStore.telemetry.length) return;
-
-		// Detect Tailwind dark mode from html classList.
 
 		const lines = $dataStore.telemetry;
 		const x = xField;
@@ -996,7 +970,11 @@
 			return arr as [number, number, number, number];
 		}
 
-		function pixelToData(x: number, y: number, yAxis: 'y' | 'y2' = 'y'): { xx: number; yy: number } {
+		function pixelToData(
+			x: number,
+			y: number,
+			yAxis: 'y' | 'y2' = 'y'
+		): { xx: number; yy: number } {
 			const layout = plotlyInstance._fullLayout;
 			const w = el.clientWidth;
 			const h = el.clientHeight;

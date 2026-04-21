@@ -1,3 +1,4 @@
+import { dataStore } from './stores/dataStore';
 import type { DataLine, SessionMetadata } from './types';
 
 export const data = $state({
@@ -12,3 +13,11 @@ export const data = $state({
 		files: { telemetry: 'data.csv' }
 	} as SessionMetadata
 });
+
+// Bridge to legacy dataStore
+export function syncToLegacy() {
+	dataStore.update((old) => ({
+		...old,
+		telemetry: data.lines
+	}));
+}
