@@ -3,6 +3,7 @@ import { NUM_FIELDS, type DataLine } from '$lib/types';
 
 export const LIVE_FRAME_DELIMITER = [10, 10, 10] as const;
 export const LIVE_FRAME_BYTES = NUM_FIELDS * 4;
+const MAX_REMAINDER_BYTES = LIVE_FRAME_BYTES * 10 + LIVE_FRAME_DELIMITER.length;
 
 type LiveFrameExtractionResult = {
 	lines: DataLine[];
@@ -27,7 +28,10 @@ export function consumeLiveSerialBytes(
 	buffer: number[],
 	chunk: Uint8Array | number[]
 ): LiveFrameExtractionResult {
-	const nextBuffer = [...buffer, ...Array.from(chunk)];
+	const nextBuffer = buffer;
+	for (const byte of chunk) {
+		nextBuffer.push(byte);
+	}
 	const lines: DataLine[] = [];
 
 	let remainingBuffer = nextBuffer;
@@ -78,8 +82,8 @@ export function consumeLiveSerialBytes(
 	}
 
 	let finalBuffer = remainingBuffer;
-	if (finalBuffer.length > 2048) {
-		finalBuffer = finalBuffer.slice(-2048);
+	if (finalBuffer.length > MAX_REMAINDER_BYTES) {
+		finalBuffer = finalBuffer.slice(-MAX_REMAINDER_BYTES);
 	}
 
 	return {
