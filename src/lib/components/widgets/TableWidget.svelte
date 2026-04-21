@@ -121,7 +121,17 @@
 		}
 		onConfigChange?.({ visibleColumns: [...visibleColumns] });
 	}
+
+	function handleWindowClick(event: MouseEvent) {
+		if (!showColumnPicker) return;
+		const target = event.target as HTMLElement | null;
+		if (!target?.closest('.table-column-dropdown')) {
+			showColumnPicker = false;
+		}
+	}
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <div
 	class="flex h-full w-full flex-col overflow-hidden text-xs rounded-xl shadow-md bg-white dark:bg-neutral-900 ring-1 ring-primary/15 dark:ring-neutral-800 focus-within:ring-2 focus-within:ring-primary"
@@ -133,7 +143,7 @@
 		<span class="text-primary-700 dark:text-neutral-300 font-semibold"
 			>{totalRows.toLocaleString()} rows</span
 		>
-		<div class="relative ml-auto">
+		<div class="relative ml-auto table-column-dropdown">
 			<button
 				onclick={() => (showColumnPicker = !showColumnPicker)}
 				class="rounded-lg border border-primary/20 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1 text-xs font-semibold shadow-sm hover:bg-primary/10 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 transition"
