@@ -66,9 +66,10 @@ export function consumeLiveSerialBytes(
 			}
 
 			// If NO later delimiter, we decide whether to wait or skip.
-			// If the buffer is large enough for a frame (195), we skip THIS delimiter.
-			// This ensures we eventually find the "next" delimiter in the next chunk.
-			if (remainingBuffer.length >= 195) {
+			// If the buffer is large enough for a full frame plus delimiter,
+			// we skip THIS delimiter. This ensures we eventually find the
+			// "next" delimiter in the next chunk.
+			if (remainingBuffer.length >= LIVE_FRAME_BYTES + LIVE_FRAME_DELIMITER.length) {
 				remainingBuffer = remainingBuffer.slice(relativeDelimiterIndex + 1);
 			} else {
 				break;
