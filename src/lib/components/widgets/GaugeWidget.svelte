@@ -70,10 +70,10 @@
 
 	// ---------------------------------------------------------------------------
 	// SVG arc gauge geometry
-	// SVG viewBox: 0 0 200 120
-	// Semi-circle centred at (100, 100), radius 80, sweeping 180° (left → right)
+	// SVG viewBox: 0 0 240 120
+	// Semi-circle centred at (120, 100), radius 80, sweeping 180° (left → right)
 	// ---------------------------------------------------------------------------
-	const CX = 100;
+	const CX = 120;
 	const CY = 100;
 	const R = 80;
 
@@ -145,7 +145,7 @@
 	{:else}
 		<!-- SVG arc gauge -->
 		<svg
-			viewBox="0 0 210 120"
+			viewBox="0 0 240 120"
 			class="w-full max-w-xs"
 			aria-label="{formatLabelWithUnit(selectedField)} gauge"
 			role="img"
@@ -203,7 +203,7 @@
 			</text>
 			<!-- Min label (left end of arc) -->
 			<text
-				x="14"
+				x={CX - R}
 				y="118"
 				text-anchor="middle"
 				font-size="9"
@@ -214,7 +214,7 @@
 			</text>
 			<!-- Max label (right end of arc) -->
 			<text
-				x="186"
+				x={CX + R}
 				y="118"
 				text-anchor="middle"
 				font-size="9"
