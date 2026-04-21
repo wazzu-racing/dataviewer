@@ -47,7 +47,7 @@ describe('consumeLiveSerialBytes', () => {
 
 	it('uses the last full row before the delimiter when extra bytes precede it', () => {
 		const junk = [99, 98, 97, 96];
-		const row = makeRawRow({ 0: 456, 8: 6200 });
+		const row = makeRawRow({ 0: 456, 8: 6200, 15: 1_700_000_000 });
 		const payload = new Uint8Array([...junk, ...encodeRow(row), ...LIVE_FRAME_DELIMITER]);
 
 		const result = consumeLiveSerialBytes([], payload);
