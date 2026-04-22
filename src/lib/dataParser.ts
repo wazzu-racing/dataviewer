@@ -66,6 +66,32 @@ export function scaleBrake(raw: number): number {
 // ---------------------------------------------------------------------------
 
 /**
+ * Validates if a raw row of integers looks like a plausible telemetry line.
+ * This is used for resyncing the live serial stream.
+ */
+export function isValidDataLine(row: number[]): boolean {
+	if (row.length !== NUM_FIELDS) return false;
+
+	// 1. Check write_millis (row[0]) is non-negative and somewhat plausible
+	// (Should not be 0 unless it just started, but definitely not huge/negative if parsed correctly)
+	if (row[0] < 0) return false;
+
+	// 2. Check unixtime (row[15]) - should be a plausible epoch timestamp (e.g., > year 2020)
+	const timestamp = row[15];
+	// 1,000,000,000 is 2001-09-09. 2,147,483,647 is 2038.
+	if (timestamp < 1000000000 || timestamp > 2147483647) {
+		return false;
+	}
+
+	// 3. Check RPM (row[8]) - car doesn't go above 20,000 RPM usually
+	if (row[8] < 0 || row[8] > 20000) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * Parse a single row of raw telemetry integers into a typed DataLine.
  * @param row  Array of signed 32-bit integers
  * @param ext  The file extension determining the layout version

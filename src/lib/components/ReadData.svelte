@@ -4,6 +4,7 @@
 	import type { FileExtension } from '$lib/types';
 	import { dataStore } from '$lib/stores/dataStore';
 	import { loadWazzuFile } from '$lib/fileFormat';
+	import { replaceSession } from '$lib/liveSession';
 
 	let { onDismiss }: { onDismiss?: () => void } = $props();
 
@@ -19,12 +20,7 @@
 		if (f.name.endsWith('.wazzuracing')) {
 			try {
 				const { telemetry, metadata } = await loadWazzuFile(buffer);
-				globalData.lines = telemetry;
-				globalData.metadata = metadata;
-				dataStore.update((old) => ({
-					...old,
-					telemetry: globalData.lines
-				}));
+				replaceSession(telemetry, metadata);
 			} catch (err: any) {
 				parseError = `Error parsing .wazzuracing file: ${err.message}`;
 			}

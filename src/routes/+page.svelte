@@ -33,8 +33,10 @@
 	import { parseBinaryBuffer } from '$lib/dataParser';
 	import { saveWazzuFile, convertBinToWazzu, downloadBlob } from '$lib/fileFormat';
 	import { data as globalData } from '$lib/data.svelte';
-	import { dataStore } from '$lib/stores/dataStore';
+	import { consumeLiveSerialBytes } from '$lib/liveConnection';
+	import { appendLiveTelemetry, replaceSession, startLiveSession } from '$lib/liveSession';
 	import type { Command } from '$lib/types';
+	import { onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import PaneLayout from '$lib/components/PaneLayout.svelte';
 	import PaneToolbar from '$lib/components/PaneToolbar.svelte';
@@ -49,6 +51,11 @@
 	// Default dimensions for a newly popped-out floating pane
 	const DEFAULT_FLOAT_WIDTH = 480;
 	const DEFAULT_FLOAT_HEIGHT = 340;
+
+	let serialBuffer: number[] = [];
+	let activeSerialPort: SerialPort | null = null;
+	let serialReadActive = false;
+	let lastLiveWriteMillis: number | null = null;
 
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
@@ -100,6 +107,104 @@
 		input.click();
 	}
 
+	async function handleConnectToCar() {
+		if (!browser || !('serial' in navigator) || !navigator.serial) {
+			alert('Connection to car is not supported. Use a different browser (chromium)');
+			return;
+		}
+
+		const usbVendorId = 0x239a;
+
+		try {
+			const port = await navigator.serial.requestPort({ filters: [{ usbVendorId }] });
+			await disconnectSerialPort();
+
+			startLiveSession();
+			showLoadDataModal = false;
+			activeSerialPort = port;
+			serialBuffer = [];
+			lastLiveWriteMillis = null;
+
+			await readDataFromSerial(port);
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'NotFoundError') {
+				alert('Please select the receiver from the list of devices.');
+				return;
+			}
+
+			const message = error instanceof Error ? error.message : 'Unknown connection error';
+			alert(`Failed to connect to car: ${message}`);
+		}
+	}
+
+	async function readDataFromSerial(port: SerialPort) {
+		// TRANSMITTER VERIFIED: 9600 baud, 192-byte frames, 3 newlines (\n\n\n = [10, 10, 10])
+		await port.open({ baudRate: 9600 });
+		serialReadActive = true;
+
+		try {
+			while (serialReadActive && port.readable) {
+				const reader = port.readable.getReader();
+				try {
+					while (serialReadActive) {
+						const { value, done } = await reader.read();
+						if (done) break;
+						if (!value) continue;
+
+						const result = consumeLiveSerialBytes(serialBuffer, value);
+						serialBuffer = result.remainder;
+
+						const nextLines = result.lines.filter((line) => {
+							if (lastLiveWriteMillis !== null) {
+								// Standard deduplication: strictly increasing millis
+								if (line.write_millis <= lastLiveWriteMillis) {
+									return false;
+								}
+							}
+							lastLiveWriteMillis = line.write_millis;
+							return true;
+						});
+
+						if (nextLines.length > 0) {
+							appendLiveTelemetry(nextLines);
+						}
+					}
+				} finally {
+					reader.releaseLock();
+				}
+			}
+		} catch (error) {
+			console.error('Serial read failed:', error);
+			const message = error instanceof Error ? error.message : 'Unknown serial read error';
+			alert(`Lost connection to car: ${message}`);
+		} finally {
+			await disconnectSerialPort();
+		}
+	}
+
+	async function disconnectSerialPort() {
+		serialReadActive = false;
+		serialBuffer = [];
+		lastLiveWriteMillis = null;
+
+		if (!activeSerialPort) return;
+
+		const port = activeSerialPort;
+		activeSerialPort = null;
+
+		try {
+			if (port.readable || port.writable) {
+				await port.close();
+			}
+		} catch (error) {
+			console.error('Failed to close serial port:', error);
+		}
+	}
+
+	onDestroy(() => {
+		void disconnectSerialPort();
+	});
+
 	// --- Add new pane at reasonable location on click ---
 	function handleAddPane(type: PaneWidgetType) {
 		// Always add a pane, preserving existing panes (even if only one exists)
@@ -146,12 +251,7 @@
 	}
 
 	function receiveMessageFromParent(e: MessageEvent): void {
-		globalData.lines = JSON.parse(e.data);
-
-		dataStore.update((old) => ({
-			...old,
-			telemetry: globalData.lines
-		}));
+		replaceSession(JSON.parse(e.data));
 	}
 
 	// ---------------------------------------------------------------------------
@@ -223,12 +323,7 @@
 						const parsedLines = parseBinaryBuffer(buffer);
 						console.log('Parsed lines count:', parsedLines.length);
 
-						// Batch updates to global state
-						globalData.lines = parsedLines;
-						dataStore.set({
-							telemetry: parsedLines,
-							widgets: [] // Ensure we don't wipe out other state if it exists
-						});
+						replaceSession(parsedLines);
 
 						showLoadDataModal = false;
 						console.log('Data loaded successfully from URL');
@@ -756,9 +851,7 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="flex flex-col w-full flex-1 min-h-0 overflow-hidden bg-stone-100">
-	<TopBar
-		onOpenCommands={() => (showCommandPalette = true)}
-	/>
+	<TopBar onOpenCommands={() => (showCommandPalette = true)} />
 	<div class="flex flex-1 overflow-hidden">
 		<PaneToolbar onAddPane={handleAddPane} />
 		<div class="relative flex-1 overflow-hidden">
@@ -815,6 +908,7 @@
 		onDismiss={() => {
 			showLoadDataModal = false;
 		}}
+		onConnectToCar={handleConnectToCar}
 		{layouts}
 		currentLayoutId={activeLayoutId}
 		onLayoutSelect={handleLoadLayout}

@@ -7,13 +7,15 @@
 
 	type Props = {
 		onDismiss: () => void;
+		onConnectToCar: () => void | Promise<void>;
 		layouts: SavedLayout[];
 		currentLayoutId: string | null;
 		onLayoutSelect: (layoutId: string) => void;
 		onManageLayouts: () => void;
 	};
 
-	let { onDismiss, layouts, currentLayoutId, onLayoutSelect, onManageLayouts }: Props = $props();
+	let { onDismiss, onConnectToCar, layouts, currentLayoutId, onLayoutSelect, onManageLayouts }: Props =
+		$props();
 
 	let readData: ReadData;
 
@@ -48,25 +50,33 @@
 >
 	<!-- Card -->
 	<div
-		class="relative w-full max-w-sm rounded-xl border border-stone-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-2xl"
+		class="relative w-full max-w-sm rounded-xl border border-stone-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-2xl overflow-hidden"
 	>
-		<!-- ReadData fills the card -->
-		<div class="min-h-56">
+		<div>
 			<ReadData bind:this={readData} {onDismiss} />
-		</div>
 
-		<div class="min-h-56">
-			<button
-				onclick={loadFromGithub}
-				class="w-full mt-3 mb-3 px-4 py-2 rounded bg-blue-500 dark:bg-blue-600 text-white hover:bg-blue-600 dark:hover:bg-blue-700 text-base font-semibold"
-			>
-				{showGithubPicker ? 'Hide Github Files' : 'Load from Github'}
-			</button>
-			{#if showGithubPicker}
-				<div class="mt-2 mb-4 max-h-64 overflow-y-auto border dark:border-neutral-700 rounded">
-					<GithubFilePicker onFileSelected={handleGithubFile} {loadingBin} />
+			<div class="px-8 pb-6 pt-1">
+				<div class="relative my-1 text-center text-xs font-semibold uppercase tracking-[0.24em] text-gray-400 dark:text-neutral-500">
+					<span class="bg-white px-3 dark:bg-neutral-900">or</span>
 				</div>
-			{/if}
+				<button
+					onclick={onConnectToCar}
+					class="mt-4 w-full rounded bg-primary px-4 py-2 text-base font-semibold text-white hover:bg-primary-700"
+				>
+					Connect to Car
+				</button>
+				<button
+					onclick={loadFromGithub}
+					class="mt-3 w-full rounded bg-blue-500 px-4 py-2 text-base font-semibold text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+				>
+					{showGithubPicker ? 'Hide Github Files' : 'Load from Github'}
+				</button>
+				{#if showGithubPicker}
+					<div class="mt-3 max-h-64 overflow-y-auto rounded border dark:border-neutral-700">
+						<GithubFilePicker onFileSelected={handleGithubFile} {loadingBin} />
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Layout Selector Section -->
