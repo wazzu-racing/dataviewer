@@ -10,21 +10,13 @@ vi.mock('$lib/components/GithubFilePicker.svelte', () => ({
 	default: vi.fn()
 }));
 
-vi.mock('$lib/components/LayoutSelector.svelte', () => ({
-	default: vi.fn()
-}));
-
 describe('LoadDataModal', () => {
 	it('calls the connect handler when Connect to Car is clicked', async () => {
 		const onConnectToCar = vi.fn();
 		const { getByRole } = render(LoadDataModal, {
 			props: {
 				onDismiss: vi.fn(),
-				onConnectToCar,
-				layouts: [],
-				currentLayoutId: null,
-				onLayoutSelect: vi.fn(),
-				onManageLayouts: vi.fn()
+				onConnectToCar
 			}
 		});
 

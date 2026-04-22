@@ -21,7 +21,10 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
-				primary: '#a60f2d',
+				primary: {
+					DEFAULT: '#a60f2d',
+					700: '#8b0d25'
+				},
 				// light/dark-neutral palette, can expand
 				background: {
 					DEFAULT: '#f8fafc', // light bg

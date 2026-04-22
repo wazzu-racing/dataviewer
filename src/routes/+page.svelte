@@ -909,10 +909,6 @@
 			showLoadDataModal = false;
 		}}
 		onConnectToCar={handleConnectToCar}
-		{layouts}
-		currentLayoutId={activeLayoutId}
-		onLayoutSelect={handleLoadLayout}
-		onManageLayouts={handleManageLayoutsClick}
 	/>
 {/if}
 

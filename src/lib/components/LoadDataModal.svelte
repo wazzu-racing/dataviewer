@@ -1,27 +1,14 @@
 <script lang="ts">
-	import type { SavedLayout } from '$lib/types';
 	import ReadData from '$lib/components/ReadData.svelte';
 	import GithubFilePicker from '$lib/components/GithubFilePicker.svelte';
-	import LayoutSelector from '$lib/components/LayoutSelector.svelte';
 	import { data as globalData } from '$lib/data.svelte';
 
 	type Props = {
 		onDismiss: () => void;
 		onConnectToCar: () => void | Promise<void>;
-		layouts: SavedLayout[];
-		currentLayoutId: string | null;
-		onLayoutSelect: (layoutId: string) => void;
-		onManageLayouts: () => void;
 	};
 
-	let {
-		onDismiss,
-		onConnectToCar,
-		layouts,
-		currentLayoutId,
-		onLayoutSelect,
-		onManageLayouts
-	}: Props = $props();
+	let { onDismiss, onConnectToCar }: Props = $props();
 
 	let readData: ReadData;
 
@@ -69,7 +56,7 @@
 				</div>
 				<button
 					onclick={onConnectToCar}
-					class="mt-4 w-full rounded bg-[#a60f2d] px-4 py-2 text-base font-semibold text-white! hover:bg-[#8b0d25] transition-colors shadow-sm"
+					class="mt-4 w-full rounded bg-primary px-4 py-2 text-base font-semibold text-white hover:bg-primary-700 transition-colors shadow-sm"
 				>
 					Connect to Car
 				</button>
@@ -87,30 +74,9 @@
 			</div>
 		</div>
 
-		<!-- Layout Selector Section -->
-		<div class="px-4 py-3 border-t border-gray-200 dark:border-neutral-700">
-			<div class="flex items-center justify-between gap-3">
-				<label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-					<span>Layout:</span>
-					<LayoutSelector {layouts} {currentLayoutId} onSelect={onLayoutSelect} compact={true} />
-				</label>
-				<div class="flex gap-2 items-center">
-					<button
-						onclick={onManageLayouts}
-						class="px-3 py-1.5 text-sm border border-gray-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 font-medium"
-					>
-						Manage
-					</button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Items loaded + Done button, only after telemetry is parsed -->
+		<!-- Done button, only after telemetry is parsed -->
 		{#if globalData.lines.length > 0}
 			<div class="w-full py-2">
-				<p class="text-center text-sm text-emerald-600 dark:text-emerald-400 mb-2">
-					{globalData.lines.length.toLocaleString()} items loaded
-				</p>
 				<button
 					onclick={onDismiss}
 					class="w-full px-4 py-2 rounded bg-blue-600 dark:bg-blue-700 text-white font-semibold hover:bg-blue-700 dark:hover:bg-blue-800"
