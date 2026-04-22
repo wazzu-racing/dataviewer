@@ -1,4 +1,4 @@
-import { NUM_FIELDS, type DataLine } from './types';
+import { BIN_FIELD_COUNT, WR_FIELD_COUNT, type DataLine, type FileExtension } from './types';
 
 // ---------------------------------------------------------------------------
 // Scaling constants for binary telemetry fields
@@ -62,24 +62,88 @@ export function scaleBrake(raw: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Main parser: converts one raw row (48 int32 values) into a DataLine
+// Main parser: converts one raw row into a DataLine
 // ---------------------------------------------------------------------------
 
 /**
  * Parse a single row of raw telemetry integers into a typed DataLine.
- * @param row  Array of exactly 48 signed 32-bit integers (little-endian from
- *             the .bin file) in the order defined by the datalogger firmware.
+ * @param row  Array of signed 32-bit integers
+ * @param ext  The file extension determining the layout version
  */
-export function parseDataLine(row: number[]): DataLine {
+export function parseDataLine(row: number[], ext: FileExtension = 'bin'): DataLine {
+	if (ext === 'wr') {
+		return {
+			write_millis: row[0],
+			ecu_millis: row[1],
+			breakout_millis: row[2],
+			gps_millis: row[3],
+			imu_millis: row[4],
+			accel_millis: row[5],
+			analogx1_millis: row[6],
+			analogx2_millis: row[6],
+			analogx3_millis: row[6],
+			thermo_millis: row[7],
+			rpm: row[8],
+			time: row[9],
+			syncloss_count: row[10],
+			syncloss_code: row[11],
+			lat: scaleGps(row[12]),
+			lon: scaleGps(row[13]),
+			elev: row[14],
+			unixtime: new Date(row[15] * 1_000),
+			ground_speed: scaleSpeed(row[16]),
+			afr: scaleEcu(row[17]),
+			fuelload: scaleEcu(row[18]),
+			spark_advance: scaleEcu(row[19]),
+			baro: scaleEcu(row[20]),
+			map: scaleEcu(row[21]),
+			mat: scaleEcu(row[22]),
+			clnt_temp: scaleEcu(row[23]),
+			tps: scaleEcu(row[24]),
+			batt: scaleEcu(row[25]),
+			oil_press: scaleEcu(row[26]),
+			ltcl_timing: scaleEcu(row[27]),
+			ve1: row[28],
+			ve2: row[29],
+			egt: 0, // Not in new struct
+			maf: scaleEcu(row[30]),
+			in_temp: scaleEcu(row[31]),
+			ax: scaleEcu(row[32]),
+			ay: scaleEcu(row[33]),
+			az: scaleEcu(row[34]),
+			imu_x: scaleEcu(row[35]),
+			imu_y: scaleEcu(row[36]),
+			imu_z: scaleEcu(row[37]),
+			susp_pot_1_FL: scaleSusp(row[38]),
+			susp_pot_2_FR: scaleSusp(row[39]),
+			susp_pot_4_RL: scaleSusp(row[40]),
+			susp_pot_3_RR: scaleSusp(row[41]),
+			oil_temp: scaleEcu(row[42]),
+			amb_air_temp: row[43],
+			brake1: scaleBrake(row[44]),
+			brake2: scaleBrake(row[45]),
+			rad_in: scaleThermo(row[46]),
+			rad_out: scaleThermo(row[47]),
+			steering: row[48],
+			thermo_1: scaleThermo(row[49]),
+			thermo_2: scaleThermo(row[50]),
+			thermo_3: scaleThermo(row[51]),
+			thermo_4: scaleThermo(row[52])
+		};
+	}
+
+	// Default / Legacy .bin format
 	return {
 		write_millis: row[0],
 		ecu_millis: row[1],
+		breakout_millis: 0,
 		gps_millis: row[2],
 		imu_millis: row[3],
 		accel_millis: row[4],
 		analogx1_millis: row[5],
 		analogx2_millis: row[6],
 		analogx3_millis: row[7],
+		thermo_millis: 0,
 		rpm: row[8],
 		time: row[9],
 		syncloss_count: row[10],
@@ -100,8 +164,8 @@ export function parseDataLine(row: number[]): DataLine {
 		batt: scaleEcu(row[25]),
 		oil_press: scaleEcu(row[26]),
 		ltcl_timing: scaleEcu(row[27]),
-		ve1: scaleEcu(row[28]),
-		ve2: scaleEcu(row[29]),
+		ve1: row[28],
+		ve2: row[29],
 		egt: scaleEcu(row[30]),
 		maf: scaleEcu(row[31]),
 		in_temp: scaleEcu(row[32]),
@@ -119,25 +183,32 @@ export function parseDataLine(row: number[]): DataLine {
 		rad_out: scaleThermo(row[44]),
 		amb_air_temp: row[45],
 		brake1: scaleBrake(row[46]),
-		brake2: scaleBrake(row[47])
+		brake2: scaleBrake(row[47]),
+		thermo_1: 0,
+		thermo_2: 0,
+		thermo_3: 0,
+		thermo_4: 0,
+		steering: 0,
+		oil_temp: 0
 	};
 }
 
 /**
  * Parses an entire binary ArrayBuffer into DataLine[].
  */
-export function parseBinaryBuffer(buffer: ArrayBuffer): DataLine[] {
+export function parseBinaryBuffer(buffer: ArrayBuffer, ext: FileExtension = 'bin'): DataLine[] {
 	const dataview = new DataView(buffer);
-	const bytesPerRow = 4 * NUM_FIELDS;
+	const fieldCount = ext === 'wr' ? WR_FIELD_COUNT : BIN_FIELD_COUNT;
+	const bytesPerRow = 4 * fieldCount;
 	const numRows = Math.floor(buffer.byteLength / bytesPerRow);
 	const lines: DataLine[] = [];
 
 	for (let row_i = 0; row_i < numRows; row_i++) {
 		const row: number[] = [];
-		for (let i = 0; i < NUM_FIELDS; i++) {
+		for (let i = 0; i < fieldCount; i++) {
 			row.push(dataview.getInt32(row_i * bytesPerRow + 4 * i, true));
 		}
-		lines.push(parseDataLine(row));
+		lines.push(parseDataLine(row, ext));
 	}
 
 	return lines;

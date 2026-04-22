@@ -9,7 +9,7 @@ describe('TopBar', () => {
 		});
 
 		expect(getAllByRole('button')).toHaveLength(1);
-		expect(getByRole('button', { name: /open command palette/i })).toBeTruthy();
+		expect(getByRole('button', { name: /command palette/i })).toBeTruthy();
 		expect(queryByRole('button', { name: /new window/i })).toBeNull();
 		expect(queryByRole('button', { name: /save layout/i })).toBeNull();
 		expect(queryByRole('button', { name: /manage/i })).toBeNull();
@@ -30,7 +30,7 @@ describe('TopBar', () => {
 			props: { onOpenCommands }
 		});
 
-		await fireEvent.click(getByRole('button', { name: /open command palette/i }));
+		await fireEvent.click(getByRole('button', { name: /command palette/i }));
 
 		expect(onOpenCommands).toHaveBeenCalledOnce();
 	});

@@ -3,10 +3,10 @@ import { render, fireEvent } from '@testing-library/svelte';
 import PaneToolbar from '$lib/components/PaneToolbar.svelte';
 
 describe('PaneToolbar', () => {
-	it('renders 5 draggable widget buttons', () => {
+	it('renders 6 draggable widget buttons', () => {
 		const { getAllByRole } = render(PaneToolbar);
 		const buttons = getAllByRole('button');
-		expect(buttons).toHaveLength(5);
+		expect(buttons).toHaveLength(6);
 	});
 
 	it('renders buttons with expected labels', () => {

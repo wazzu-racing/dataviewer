@@ -56,7 +56,15 @@ const FIELD_METADATA: FieldMetadataMap = {
 	rad_out: { label: 'Radiator Outlet Temp', unit: '°F', precision: 1 },
 	amb_air_temp: { label: 'Ambient Air Temp', unit: '°F', precision: 1 },
 	brake1: { label: 'Brake Pressure 1', unit: 'psi', precision: 0 },
-	brake2: { label: 'Brake Pressure 2', unit: 'psi', precision: 0 }
+	brake2: { label: 'Brake Pressure 2', unit: 'psi', precision: 0 },
+	breakout_millis: { label: 'Breakout Millis', unit: 'ms', precision: 0 },
+	thermo_millis: { label: 'Thermo Millis', unit: 'ms', precision: 0 },
+	thermo_1: { label: 'Thermo 1', unit: '°F', precision: 1 },
+	thermo_2: { label: 'Thermo 2', unit: '°F', precision: 1 },
+	thermo_3: { label: 'Thermo 3', unit: '°F', precision: 1 },
+	thermo_4: { label: 'Thermo 4', unit: '°F', precision: 1 },
+	steering: { label: 'Steering Angle', unit: '°', precision: 1 },
+	oil_temp: { label: 'Oil Temp', unit: '°F', precision: 1 }
 };
 
 const FALLBACK_LABEL = (field: string) =>

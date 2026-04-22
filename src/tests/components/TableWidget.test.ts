@@ -59,6 +59,14 @@ function makeDataLine(overrides: Partial<DataLine> = {}): DataLine {
 		amb_air_temp: 0,
 		brake1: 0,
 		brake2: 0,
+		breakout_millis: 0,
+		thermo_millis: 0,
+		thermo_1: 0,
+		thermo_2: 0,
+		thermo_3: 0,
+		thermo_4: 0,
+		steering: 0,
+		oil_temp: 0,
 		...overrides
 	};
 }
@@ -114,11 +122,11 @@ describe('TableWidget', () => {
 		expect(checkboxes.length).toBeGreaterThan(0);
 	});
 
-	it('column picker shows all 47 available columns as checkboxes', async () => {
+	it('column picker shows all 55 available columns as checkboxes', async () => {
 		const { getByText, container } = render(TableWidget);
 		await fireEvent.click(getByText(/Columns/));
 		const checkboxes = container.querySelectorAll('input[type="checkbox"]');
-		expect(checkboxes.length).toBe(47);
+		expect(checkboxes.length).toBe(55);
 	});
 
 	it('renders data rows when data is loaded', () => {

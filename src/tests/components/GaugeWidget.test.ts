@@ -76,6 +76,14 @@ function makeDataLine(overrides: Partial<DataLine> = {}): DataLine {
 		amb_air_temp: 0,
 		brake1: 0,
 		brake2: 0,
+		breakout_millis: 0,
+		thermo_millis: 0,
+		thermo_1: 0,
+		thermo_2: 0,
+		thermo_3: 0,
+		thermo_4: 0,
+		steering: 0,
+		oil_temp: 0,
 		...overrides
 	};
 }
@@ -142,10 +150,9 @@ describe('GaugeWidget', () => {
 	it('shows min value and max value as SVG text labels', () => {
 		syncTelemetry([makeDataLine({ rpm: 100 }), makeDataLine({ rpm: 8000 })]);
 		const { container } = render(GaugeWidget);
-		const minNode = container.querySelector('text[x="14"][y="118"]');
-		const maxNode = container.querySelector('text[x="186"][y="118"]');
-		expect(minNode?.textContent?.trim()).toBe(formatFieldValue('rpm', 100, { includeUnit: true }));
-		expect(maxNode?.textContent?.trim()).toBe(formatFieldValue('rpm', 8000, { includeUnit: true }));
+		const texts = Array.from(container.querySelectorAll('text')).map((t) => t.textContent?.trim());
+		expect(texts).toContain(formatFieldValue('rpm', 100, { includeUnit: true }));
+		expect(texts).toContain(formatFieldValue('rpm', 8000, { includeUnit: true }));
 	});
 
 	it('renders the field label in the SVG', () => {

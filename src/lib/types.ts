@@ -4,12 +4,14 @@
 export type DataLine = {
 	write_millis: number;
 	ecu_millis: number;
+	breakout_millis: number; // new
 	gps_millis: number;
 	imu_millis: number;
 	accel_millis: number;
 	analogx1_millis: number;
 	analogx2_millis: number;
 	analogx3_millis: number;
+	thermo_millis: number; // new
 	rpm: number;
 	time: number;
 	syncloss_count: number;
@@ -50,9 +52,19 @@ export type DataLine = {
 	amb_air_temp: number;
 	brake1: number;
 	brake2: number;
+	thermo_1: number; // new
+	thermo_2: number; // new
+	thermo_3: number; // new
+	thermo_4: number; // new
+	steering: number; // new
+	oil_temp: number; // new
 };
 
-export const NUM_FIELDS = 48;
+export const BIN_FIELD_COUNT = 48;
+export const WR_FIELD_COUNT = 53;
+
+/** Union of binary file extensions */
+export type FileExtension = 'bin' | 'wr';
 
 // ---------------------------------------------------------------------------
 // Widget configuration types
@@ -179,12 +191,14 @@ export type LayoutStoreData = {
 export const NUMERIC_FIELDS = [
 	'write_millis',
 	'ecu_millis',
+	'breakout_millis',
 	'gps_millis',
 	'imu_millis',
 	'accel_millis',
 	'analogx1_millis',
 	'analogx2_millis',
 	'analogx3_millis',
+	'thermo_millis',
 	'rpm',
 	'time',
 	'syncloss_count',
@@ -223,7 +237,13 @@ export const NUMERIC_FIELDS = [
 	'rad_out',
 	'amb_air_temp',
 	'brake1',
-	'brake2'
+	'brake2',
+	'thermo_1',
+	'thermo_2',
+	'thermo_3',
+	'thermo_4',
+	'steering',
+	'oil_temp'
 ] as const satisfies (keyof DataLine)[];
 
 /** Union of all numeric DataLine field names */

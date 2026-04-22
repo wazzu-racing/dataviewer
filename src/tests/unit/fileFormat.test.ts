@@ -53,7 +53,15 @@ describe('fileFormat', () => {
 			rad_out: 70,
 			amb_air_temp: 20,
 			brake1: 100,
-			brake2: 100
+			brake2: 100,
+			breakout_millis: 0,
+			thermo_millis: 0,
+			thermo_1: 0,
+			thermo_2: 0,
+			thermo_3: 0,
+			thermo_4: 0,
+			steering: 0,
+			oil_temp: 0
 		}
 	];
 

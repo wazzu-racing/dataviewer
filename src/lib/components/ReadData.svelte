@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseBinaryBuffer } from '$lib/dataParser';
+	import type { FileExtension } from '$lib/types';
 	import { dataStore } from '$lib/stores/dataStore';
 	import { loadWazzuFile } from '$lib/fileFormat';
 
@@ -28,13 +29,14 @@
 				parseError = `Error parsing .wazzuracing file: ${err.message}`;
 			}
 		} else {
-			parse(buffer);
+			const ext = f.name.endsWith('.wr') ? 'wr' : 'bin';
+			parse(buffer, ext);
 		}
 	}
 
-	export async function parse(buffer: ArrayBuffer) {
+	export async function parse(buffer: ArrayBuffer, ext: 'bin' | 'wr' = 'bin') {
 		try {
-			globalData.lines = parseBinaryBuffer(buffer);
+			globalData.lines = parseBinaryBuffer(buffer, ext);
 
 			// Synchronize telemetry to shared dataStore!
 			dataStore.update((old) => ({
@@ -59,7 +61,7 @@
 		type="file"
 		bind:files
 		onchange={handleLoadFile}
-		accept=".bin,.wazzuracing"
+		accept=".bin,.wr,.wazzuracing"
 		class="text-sm text-zinc-700 dark:text-neutral-300 file:mr-3 file:cursor-pointer file:rounded-md file:border-2 file:border-primary file:bg-background dark:file:bg-neutral-800 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-primary dark:file:text-neutral-100 transition-all duration-150 hover:file:bg-primary hover:file:text-white focus:file:ring-2 focus:file:ring-primary/70 focus:file:outline-none"
 	/>
 

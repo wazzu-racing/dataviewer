@@ -50,13 +50,15 @@
 		$dataStore.telemetry.length > 0
 			? $dataStore.telemetry
 					.map((l) => l[selectedField] as number)
-					.filter(
-						(v) => typeof v === 'number' && isFinite(v) && v !== null && v !== undefined && v > 0
-					) // Exclude zeros/nulls/NaN
+					.filter((v) => typeof v === 'number' && isFinite(v) && v !== null && v !== undefined)
 			: []
 	);
-	const minVal = $derived(allValues.length > 0 ? Math.min(...allValues) : 0);
-	const maxVal = $derived(allValues.length > 0 ? Math.max(...allValues) : 1);
+	const minVal = $derived(
+		allValues.length > 0 ? allValues.reduce((a, b) => Math.min(a, b), Infinity) : 0
+	);
+	const maxVal = $derived(
+		allValues.length > 0 ? allValues.reduce((a, b) => Math.max(a, b), -Infinity) : 1
+	);
 	const avgVal = $derived(
 		allValues.length > 0
 			? allValues.reduce((sum, value) => sum + value, 0) / allValues.length
@@ -206,6 +208,7 @@
 				x={CX - R}
 				y="118"
 				text-anchor="middle"
+				dominant-baseline="auto"
 				font-size="9"
 				fill="#a8a29e"
 				class="dark:fill-neutral-400"
@@ -217,6 +220,7 @@
 				x={CX + R}
 				y="118"
 				text-anchor="middle"
+				dominant-baseline="auto"
 				font-size="9"
 				fill="#a8a29e"
 				class="dark:fill-neutral-400"
