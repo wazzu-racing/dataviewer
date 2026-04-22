@@ -1,8 +1,8 @@
 import { isValidDataLine, parseDataLine } from '$lib/dataParser';
-import { NUM_FIELDS, type DataLine } from '$lib/types';
+import { BIN_FIELD_COUNT, type DataLine } from '$lib/types';
 
 export const LIVE_FRAME_DELIMITER = [10, 10, 10] as const;
-export const LIVE_FRAME_BYTES = NUM_FIELDS * 4;
+export const LIVE_FRAME_BYTES = BIN_FIELD_COUNT * 4;
 const MAX_REMAINDER_BYTES = LIVE_FRAME_BYTES * 10 + LIVE_FRAME_DELIMITER.length;
 
 type LiveFrameExtractionResult = {
@@ -47,7 +47,7 @@ export function consumeLiveSerialBytes(
 			const row: number[] = [];
 			const arrayBuffer = new Uint8Array(frame).buffer;
 			const dataview = new DataView(arrayBuffer);
-			for (let i = 0; i < NUM_FIELDS; i++) {
+			for (let i = 0; i < BIN_FIELD_COUNT; i++) {
 				row.push(dataview.getInt32(i * 4, true));
 			}
 

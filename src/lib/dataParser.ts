@@ -70,7 +70,7 @@ export function scaleBrake(raw: number): number {
  * This is used for resyncing the live serial stream.
  */
 export function isValidDataLine(row: number[]): boolean {
-	if (row.length !== NUM_FIELDS) return false;
+	if (row.length !== BIN_FIELD_COUNT && row.length !== WR_FIELD_COUNT) return false;
 
 	// 1. Check write_millis (row[0]) is non-negative and somewhat plausible
 	// (Should not be 0 unless it just started, but definitely not huge/negative if parsed correctly)
