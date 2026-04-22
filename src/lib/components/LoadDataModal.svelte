@@ -14,8 +14,14 @@
 		onManageLayouts: () => void;
 	};
 
-	let { onDismiss, onConnectToCar, layouts, currentLayoutId, onLayoutSelect, onManageLayouts }: Props =
-		$props();
+	let {
+		onDismiss,
+		onConnectToCar,
+		layouts,
+		currentLayoutId,
+		onLayoutSelect,
+		onManageLayouts
+	}: Props = $props();
 
 	let readData: ReadData;
 
@@ -56,12 +62,14 @@
 			<ReadData bind:this={readData} {onDismiss} />
 
 			<div class="px-8 pb-6 pt-1">
-				<div class="relative my-1 text-center text-xs font-semibold uppercase tracking-[0.24em] text-gray-400 dark:text-neutral-500">
+				<div
+					class="relative my-1 text-center text-xs font-semibold uppercase tracking-[0.24em] text-gray-400 dark:text-neutral-500"
+				>
 					<span class="bg-white px-3 dark:bg-neutral-900">or</span>
 				</div>
 				<button
 					onclick={onConnectToCar}
-					class="mt-4 w-full rounded bg-primary px-4 py-2 text-base font-semibold text-white hover:bg-primary-700"
+					class="mt-4 w-full rounded bg-[#a60f2d] px-4 py-2 text-base font-semibold text-white! hover:bg-[#8b0d25] transition-colors shadow-sm"
 				>
 					Connect to Car
 				</button>
