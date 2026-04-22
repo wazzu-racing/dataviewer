@@ -9,7 +9,9 @@ declare global {
 	}
 
 	interface Serial {
-		requestPort(options?: { filters?: Array<{ usbVendorId?: number; usbProductId?: number }> }): Promise<SerialPort>;
+		requestPort(options?: {
+			filters?: Array<{ usbVendorId?: number; usbProductId?: number }>;
+		}): Promise<SerialPort>;
 	}
 
 	interface Navigator {

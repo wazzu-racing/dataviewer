@@ -60,5 +60,7 @@ export function findNearestTrackSampleByTelemetryIndex(
 	if (!previous) return next;
 	if (!next) return previous;
 
-	return targetIndex - previous.telemetryIndex <= next.telemetryIndex - targetIndex ? previous : next;
+	return targetIndex - previous.telemetryIndex <= next.telemetryIndex - targetIndex
+		? previous
+		: next;
 }

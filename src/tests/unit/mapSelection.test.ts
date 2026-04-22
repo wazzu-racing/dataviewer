@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { findNearestTelemetryIndex, findNearestTrackSampleByTelemetryIndex } from '$lib/mapSelection';
+import {
+	findNearestTelemetryIndex,
+	findNearestTrackSampleByTelemetryIndex
+} from '$lib/mapSelection';
 
 describe('findNearestTelemetryIndex', () => {
 	it('returns null when there are no samples', () => {

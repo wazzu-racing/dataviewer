@@ -1,5 +1,11 @@
 <script lang="ts">
-	import type { PaneWidgetType, GraphConfig, TableConfig, GaugeConfig, MapConfig } from '$lib/types';
+	import type {
+		PaneWidgetType,
+		GraphConfig,
+		TableConfig,
+		GaugeConfig,
+		MapConfig
+	} from '$lib/types';
 	import GraphWidget from '$lib/components/widgets/GraphWidget.svelte';
 	import MapWidget from '$lib/components/widgets/MapWidget.svelte';
 	import TableWidget from '$lib/components/widgets/TableWidget.svelte';

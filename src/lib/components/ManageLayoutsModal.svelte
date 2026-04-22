@@ -91,9 +91,7 @@
 			{#if layouts.length === 0}
 				<div class="text-center py-8 text-gray-500 dark:text-gray-400">
 					<p class="text-lg mb-2">No saved layouts</p>
-					<p class="text-sm">
-						Save your first layout from the command palette
-					</p>
+					<p class="text-sm">Save your first layout from the command palette</p>
 				</div>
 			{:else}
 				<div class="space-y-3">

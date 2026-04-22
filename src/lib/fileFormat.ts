@@ -127,7 +127,6 @@ export async function convertBinToWazzu(
 	return saveWazzuFile(telemetry, metadata);
 }
 
-
 /**
  * Triggers a browser download for the given Blob.
  * Creates a temporary anchor element, clicks it, then cleans up.

@@ -3,7 +3,10 @@
 	import { browser } from '$app/environment';
 	import { formatLabelWithUnit, isNumericField } from '$lib/fieldMetadata';
 	import { loadLeaflet } from '$lib/leaflet';
-	import { findNearestTelemetryIndex, findNearestTrackSampleByTelemetryIndex } from '$lib/mapSelection';
+	import {
+		findNearestTelemetryIndex,
+		findNearestTrackSampleByTelemetryIndex
+	} from '$lib/mapSelection';
 	import { dataStore } from '$lib/stores/dataStore';
 	import { setIndex, timeIndexStore } from '$lib/stores/time';
 	import { NUMERIC_FIELDS, type MapConfig, type NumericField } from '$lib/types';
