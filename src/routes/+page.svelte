@@ -138,7 +138,7 @@
 	}
 
 	async function readDataFromSerial(port: SerialPort) {
-		// TRANSMITTER VERIFIED: 9600 baud, 192-byte frames, 3 newlines (\n\n\n = [10, 10, 10])
+		// TRANSMITTER VERIFIED: 9600 baud, 212-byte frames (.wr format), 3 newlines (\n\n\n = [10, 10, 10])
 		await port.open({ baudRate: 9600 });
 		serialReadActive = true;
 

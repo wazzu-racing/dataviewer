@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { consumeLiveSerialBytes, LIVE_FRAME_DELIMITER } from '$lib/liveConnection';
-import { NUM_FIELDS, type DataLine } from '$lib/types';
+import { WR_FIELD_COUNT, type DataLine } from '$lib/types';
 
 function makeRawRow(overrides: Partial<Record<number, number>> = {}): number[] {
-	return Array.from({ length: NUM_FIELDS }, (_, index) => overrides[index] ?? 0);
+	return Array.from({ length: WR_FIELD_COUNT }, (_, index) => overrides[index] ?? 0);
 }
 
 function encodeRow(row: number[]): Uint8Array {
-	const bytes = new Uint8Array(NUM_FIELDS * 4);
+	const bytes = new Uint8Array(WR_FIELD_COUNT * 4);
 	const view = new DataView(bytes.buffer);
 
-	for (let i = 0; i < NUM_FIELDS; i++) {
+	for (let i = 0; i < WR_FIELD_COUNT; i++) {
 		view.setInt32(i * 4, row[i], true);
 	}
 
