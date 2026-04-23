@@ -28,3 +28,4 @@ docs/
 .harper-dictionary.txt
 test/
 *.wazzuracing
+test_images
