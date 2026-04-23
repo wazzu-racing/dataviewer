@@ -56,7 +56,7 @@
 				</div>
 				<button
 					onclick={onConnectToCar}
-					class="mt-4 w-full rounded bg-primary px-4 py-2 text-base font-semibold text-white hover:bg-primary-700 transition-colors shadow-sm"
+					class="mt-4 w-full rounded bg-[#a60f2d] px-4 py-2 text-base font-semibold text-white! hover:bg-[#8b0d25] transition-colors shadow-sm"
 				>
 					Connect to Car
 				</button>
