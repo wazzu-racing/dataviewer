@@ -3,7 +3,10 @@ import { WR_FIELD_COUNT, type DataLine } from '$lib/types';
 
 export const LIVE_FRAME_DELIMITER = [10, 10, 10] as const;
 export const LIVE_FRAME_BYTES = WR_FIELD_COUNT * 4;
-const MAX_REMAINDER_BYTES = LIVE_FRAME_BYTES * 10 + LIVE_FRAME_DELIMITER.length;
+// The live stream delimiter is a run of 3 or more newlines.
+const MAX_REMAINDER_BYTES = LIVE_FRAME_BYTES * 10 + LIVE_FRAME_DELIMITER.length + 8;
+
+const DEBUG_LIVE_PARSE = false;
 
 type LiveFrameExtractionResult = {
 	lines: DataLine[];
@@ -24,10 +27,36 @@ function findDelimiterIndex(buffer: number[]): number {
 	return -1;
 }
 
+function delimiterEndIndex(buffer: number[], delimiterStart: number): number {
+	// Accept both \n\n\n and \n\n\n\n (or more) as a delimiter run.
+	let end = delimiterStart + LIVE_FRAME_DELIMITER.length;
+	while (end < buffer.length && buffer[end] === 10) {
+		end++;
+	}
+	return end;
+}
+
+function decodeFrameBytes(frame: number[]): number[] {
+	const row: number[] = [];
+	const arrayBuffer = new Uint8Array(frame).buffer;
+	const dataview = new DataView(arrayBuffer);
+	for (let i = 0; i < WR_FIELD_COUNT; i++) {
+		row.push(dataview.getInt32(i * 4, true));
+	}
+	return row;
+}
+
 export function consumeLiveSerialBytes(
 	buffer: number[],
 	chunk: Uint8Array | number[]
 ): LiveFrameExtractionResult {
+	if (DEBUG_LIVE_PARSE) {
+		console.log(
+			'[SerialDebug] consumeLiveSerialBytes called — incoming chunk:',
+			Array.isArray(chunk) ? chunk.length : ((chunk as Uint8Array)?.byteLength ?? 0)
+		);
+	}
+
 	const nextBuffer = buffer;
 	for (const byte of chunk) {
 		nextBuffer.push(byte);
@@ -39,25 +68,39 @@ export function consumeLiveSerialBytes(
 		const relativeDelimiterIndex = findDelimiterIndex(remainingBuffer);
 		if (relativeDelimiterIndex === -1) break;
 
+		const delimEnd = delimiterEndIndex(remainingBuffer, relativeDelimiterIndex);
+
 		let foundValidFrame = false;
 
 		if (relativeDelimiterIndex >= LIVE_FRAME_BYTES) {
-			const frameStart = relativeDelimiterIndex - LIVE_FRAME_BYTES;
-			const frame = remainingBuffer.slice(frameStart, relativeDelimiterIndex);
-			const row: number[] = [];
-			const arrayBuffer = new Uint8Array(frame).buffer;
-			const dataview = new DataView(arrayBuffer);
-			for (let i = 0; i < WR_FIELD_COUNT; i++) {
-				row.push(dataview.getInt32(i * 4, true));
-			}
+			// The delimiter can land on any byte boundary in the stream.
+			// Try a small alignment search (0..3 byte offset) to find a valid int32 row.
+			for (let offset = 0; offset < 4; offset++) {
+				const frameStart = relativeDelimiterIndex - LIVE_FRAME_BYTES - offset;
+				if (frameStart < 0) continue;
 
-			if (isValidDataLine(row)) {
-				const line = parseDataLine(row, 'wr');
-				lines.push(line);
-				remainingBuffer = remainingBuffer.slice(
-					relativeDelimiterIndex + LIVE_FRAME_DELIMITER.length
-				);
-				foundValidFrame = true;
+				const frame = remainingBuffer.slice(frameStart, relativeDelimiterIndex);
+				const row = decodeFrameBytes(frame);
+				const valid = isValidDataLine(row);
+
+				if (DEBUG_LIVE_PARSE) {
+					console.log(
+						'[SerialDebug] Attempting to parse frame at',
+						frameStart,
+						'offset',
+						offset,
+						'length',
+						LIVE_FRAME_BYTES
+					);
+					console.log('[SerialDebug] isValidDataLine(', row, '):', valid);
+				}
+
+				if (valid) {
+					lines.push(parseDataLine(row, 'wr'));
+					remainingBuffer = remainingBuffer.slice(delimEnd);
+					foundValidFrame = true;
+					break;
+				}
 			}
 		}
 

@@ -2,6 +2,8 @@ import { data as globalData, syncToLegacy } from '$lib/data.svelte';
 import { setIndex } from '$lib/stores/time';
 import type { DataLine, SessionMetadata } from '$lib/types';
 
+const DEBUG_LIVE_SESSION = false;
+
 type SessionMetadataOverrides = Partial<Omit<SessionMetadata, 'files'>> & {
 	files?: Partial<SessionMetadata['files']>;
 };
@@ -48,6 +50,14 @@ export function startLiveSession(metadataOverrides: SessionMetadataOverrides = {
 }
 
 export function appendLiveTelemetry(lines: DataLine | DataLine[]) {
+	if (DEBUG_LIVE_SESSION) {
+		console.log(
+			'[SerialDebug] appendLiveTelemetry called with',
+			Array.isArray(lines) ? lines.length : 1,
+			'new lines:',
+			lines
+		);
+	}
 	const nextLines = Array.isArray(lines) ? lines : [lines];
 	if (nextLines.length === 0) return;
 

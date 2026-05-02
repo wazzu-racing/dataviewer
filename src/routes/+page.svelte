@@ -57,6 +57,8 @@
 	let serialReadActive = false;
 	let lastLiveWriteMillis: number | null = null;
 
+	const SERIAL_DEBUG = false;
+
 	// ---------------------------------------------------------------------------
 	// Default layout — shown the first time (no saved state)
 	// ---------------------------------------------------------------------------
@@ -108,7 +110,9 @@
 	}
 
 	async function handleConnectToCar() {
+		if (SERIAL_DEBUG) console.log('[SerialDebug] handleConnectToCar called');
 		if (!browser || !('serial' in navigator) || !navigator.serial) {
+			if (SERIAL_DEBUG) console.warn('[SerialDebug] Browser does not support WebSerial');
 			alert('Connection to car is not supported. Use a different browser (chromium)');
 			return;
 		}
@@ -116,17 +120,27 @@
 		const usbVendorId = 0x239a;
 
 		try {
+			if (SERIAL_DEBUG)
+				console.log(
+					'[SerialDebug] Opening port picker (usbVendorId=0x' + usbVendorId.toString(16) + ')...'
+				);
 			const port = await navigator.serial.requestPort({ filters: [{ usbVendorId }] });
+			if (SERIAL_DEBUG) console.log('[SerialDebug] Port selected:', port);
 			await disconnectSerialPort();
 
+			if (SERIAL_DEBUG) console.log('[SerialDebug] Starting live session');
 			startLiveSession();
 			showLoadDataModal = false;
+			if (SERIAL_DEBUG) console.log('[SerialDebug] Storing reference to selected port.');
 			activeSerialPort = port;
+			if (SERIAL_DEBUG) console.log('[SerialDebug] Resetting serialBuffer and lastLiveWriteMillis');
 			serialBuffer = [];
 			lastLiveWriteMillis = null;
 
+			if (SERIAL_DEBUG) console.log('[SerialDebug] Beginning to read from serial port...');
 			await readDataFromSerial(port);
 		} catch (error) {
+			console.error('[SerialDebug] Serial connection error:', error);
 			if (error instanceof DOMException && error.name === 'NotFoundError') {
 				alert('Please select the receiver from the list of devices.');
 				return;
@@ -138,20 +152,36 @@
 	}
 
 	async function readDataFromSerial(port: SerialPort) {
+		if (SERIAL_DEBUG) console.log('[SerialDebug] readDataFromSerial called', port);
 		// TRANSMITTER VERIFIED: 9600 baud, 212-byte frames (.wr format), 3 newlines (\n\n\n = [10, 10, 10])
+		if (SERIAL_DEBUG) console.log('[SerialDebug] Opening serial port at 9600 baud...');
 		await port.open({ baudRate: 9600 });
+		if (SERIAL_DEBUG) console.log('[SerialDebug] Port opened successfully!');
 		serialReadActive = true;
 
 		try {
+			if (SERIAL_DEBUG) console.log('[SerialDebug] Entering main serial read loop...');
 			while (serialReadActive && port.readable) {
 				const reader = port.readable.getReader();
 				try {
+					if (SERIAL_DEBUG) console.log('[SerialDebug] Acquired reader, starting chunked read...');
 					while (serialReadActive) {
 						const { value, done } = await reader.read();
+						if (value) {
+							if (SERIAL_DEBUG)
+								console.log('[SerialDebug] Serial chunk received, length:', value.length, value);
+						}
 						if (done) break;
 						if (!value) continue;
 
 						const result = consumeLiveSerialBytes(serialBuffer, value);
+						if (SERIAL_DEBUG)
+							console.log(
+								'[SerialDebug] consumeLiveSerialBytes lines:',
+								result.lines.length,
+								'remainder:',
+								result.remainder.length
+							);
 						serialBuffer = result.remainder;
 
 						const nextLines = result.lines.filter((line) => {
@@ -166,15 +196,18 @@
 						});
 
 						if (nextLines.length > 0) {
+							if (SERIAL_DEBUG)
+								console.log('[SerialDebug] Appending live telemetry:', nextLines.length, nextLines);
 							appendLiveTelemetry(nextLines);
 						}
 					}
 				} finally {
+					if (SERIAL_DEBUG) console.log('[SerialDebug] Released serial reader lock.');
 					reader.releaseLock();
 				}
 			}
 		} catch (error) {
-			console.error('Serial read failed:', error);
+			console.error('[SerialDebug] Serial read failed:', error);
 			const message = error instanceof Error ? error.message : 'Unknown serial read error';
 			alert(`Lost connection to car: ${message}`);
 		} finally {
@@ -325,6 +358,7 @@
 
 						replaceSession(parsedLines);
 
+						if (SERIAL_DEBUG) console.log('[SerialDebug] Hiding Load Data modal');
 						showLoadDataModal = false;
 						console.log('Data loaded successfully from URL');
 					})
