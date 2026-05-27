@@ -204,11 +204,11 @@
 			onscroll={() => (scrollTop = scrollContainer?.scrollTop ?? 0)}
 		>
 			<!-- Full-height spacer so scrollbar is correct size -->
-			<div style="height:{totalHeight}px; position:relative;">
-				<div style="transform: translateY({offsetY}px);">
+			<div style="height:{totalHeight}px; width: fit-content; position:relative;">
+				<div style="transform: translateY({offsetY}px); width: fit-content;">
 					{#each visibleRows as row, i (startIdx + i)}
 						<div
-							class={`flex border-b border-primary/5 dark:border-neutral-800 transition group rounded-md mx-1 my-0.5
+							class={`flex border-b border-primary/5 dark:border-neutral-800 transition group rounded-md my-0.5
 								hover:bg-primary/5 dark:hover:bg-neutral-800 focus-within:bg-primary/10 dark:focus-within:bg-neutral-700
 								${nearestRowIdx === startIdx + i ? 'bg-primary/20 dark:bg-primary/30 font-bold ring-2 ring-primary/50' : (startIdx + i) % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-primary/5 dark:bg-neutral-900/60'}`}
 							style="height:{ROW_HEIGHT}px;"
