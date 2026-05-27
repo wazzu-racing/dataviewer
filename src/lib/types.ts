@@ -148,6 +148,18 @@ export type FloatingPaneState = {
 	config?: Record<string, unknown>;
 };
 
+/** Layout state for a single window (tiled + floating panes) */
+export type WindowLayoutState = {
+	layout: LayoutNode;
+	floatingPanes: FloatingPaneState[];
+};
+
+/** Optional second-window state, persisted alongside the main layout */
+export type MultiWindowLayoutState = {
+	childEnabled: boolean;
+	child: WindowLayoutState | null;
+};
+
 // ---------------------------------------------------------------------------
 // Saved Layout Management
 // ---------------------------------------------------------------------------
@@ -158,6 +170,10 @@ export type SavedLayout = {
 	name: string;
 	layout: LayoutNode;
 	floatingPanes: FloatingPaneState[];
+	/** Whether a second dashboard window should be open for this layout */
+	childEnabled: boolean;
+	/** Child window layout state (when enabled). Null/undefined means "use defaults". */
+	child: WindowLayoutState | null;
 	createdAt: number;
 	lastUsed: number;
 };

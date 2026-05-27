@@ -32,6 +32,11 @@
 	// ---------------------------------------------------------------------------
 	let selectedField: NumericField = $state(_seedField);
 
+	// Child window data sync awareness
+	const isChildWindow = typeof window !== 'undefined' && !!window.opener;
+	const isDataSyncing =
+		typeof document !== 'undefined' && document.documentElement.dataset.dataSync === 'in-progress';
+
 	function persistConfig() {
 		onConfigChange?.({ field: selectedField });
 	}
@@ -143,7 +148,9 @@
 	</select>
 
 	{#if $dataStore.telemetry.length === 0}
-		<p class="mt-4 text-sm text-neutral-400 dark:text-neutral-500">No data loaded</p>
+		<p class="mt-4 text-sm text-neutral-400 dark:text-neutral-500">
+			{isDataSyncing ? 'Syncing data from main window…' : 'No data loaded'}
+		</p>
 	{:else}
 		<!-- SVG arc gauge -->
 		<svg

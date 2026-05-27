@@ -94,6 +94,11 @@
 	let scrollContainer: HTMLDivElement | undefined = $state();
 	let scrollTop = $state(0);
 
+	// Child windows get data pushed from the master; the Load Data instruction is irrelevant.
+	const isChildWindow = typeof window !== 'undefined' && !!window.opener;
+	const isDataSyncing =
+		typeof document !== 'undefined' && document.documentElement.dataset.dataSync === 'in-progress';
+
 	const lines = $derived(globalData.lines);
 	const totalRows = $derived(lines.length);
 	const totalHeight = $derived(totalRows * ROW_HEIGHT);
@@ -176,9 +181,11 @@
 
 	{#if totalRows === 0}
 		<div class="flex flex-1 items-center justify-center text-neutral-400 dark:text-neutral-500">
-			No data loaded — use a <span class="font-semibold text-primary-600 dark:text-primary-400"
-				>Load Data</span
-			> pane to import a file
+			{isDataSyncing
+				? 'Syncing data from main window…'
+				: isChildWindow
+					? 'No data loaded — waiting for sync from main window'
+					: 'No data loaded — use a Load Data pane to import a file'}
 		</div>
 	{:else}
 		<!-- Sticky header -->
