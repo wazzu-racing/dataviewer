@@ -1,6 +1,7 @@
 import { data as globalData, syncToLegacy } from '$lib/data.svelte';
 import { setIndex } from '$lib/stores/time';
 import type { DataLine, SessionMetadata } from '$lib/types';
+import { getMasterBridge } from '$lib/windowBridgeRegistry';
 
 const DEBUG_LIVE_SESSION = false;
 
@@ -37,6 +38,9 @@ export function replaceSession(
 	globalData.metadata = metadata;
 	syncTelemetry(telemetry);
 	setIndex(telemetry.length > 0 ? telemetry.length - 1 : 0);
+
+	const bridge = getMasterBridge();
+	bridge?.sendFullTelemetry(telemetry, metadata);
 }
 
 export function startLiveSession(metadataOverrides: SessionMetadataOverrides = {}) {
@@ -64,4 +68,7 @@ export function appendLiveTelemetry(lines: DataLine | DataLine[]) {
 	const telemetry = [...globalData.lines, ...nextLines];
 	syncTelemetry(telemetry);
 	setIndex(telemetry.length - 1);
+
+	const bridge = getMasterBridge();
+	bridge?.sendTelemetryAppend(nextLines);
 }

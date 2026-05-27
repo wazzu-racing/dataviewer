@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseBinaryBuffer } from '$lib/dataParser';
-	import type { FileExtension } from '$lib/types';
-	import { dataStore } from '$lib/stores/dataStore';
 	import { loadWazzuFile } from '$lib/fileFormat';
 	import { replaceSession } from '$lib/liveSession';
 
-	let { onDismiss }: { onDismiss?: () => void } = $props();
+	// onDismiss is part of the component props contract (forwarded/used by parent modal)
+	// but not referenced inside this component body.
+	let { onDismiss: _onDismiss }: { onDismiss?: () => void } = $props(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
 	let files: FileList | undefined = $state();
 	let parseError: string | null = $state(null);
@@ -21,26 +21,25 @@
 			try {
 				const { telemetry, metadata } = await loadWazzuFile(buffer);
 				replaceSession(telemetry, metadata);
-			} catch (err: any) {
-				parseError = `Error parsing .wazzuracing file: ${err.message}`;
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				parseError = `Error parsing .wazzuracing file: ${message}`;
 			}
 		} else {
 			const ext = f.name.endsWith('.wr') ? 'wr' : 'bin';
-			parse(buffer, ext);
+			await parse(buffer, ext);
 		}
 	}
 
 	export async function parse(buffer: ArrayBuffer, ext: 'bin' | 'wr' = 'bin') {
 		try {
-			globalData.lines = parseBinaryBuffer(buffer, ext);
-
-			// Synchronize telemetry to shared dataStore!
-			dataStore.update((old) => ({
-				...old,
-				telemetry: globalData.lines
-			}));
-		} catch (err: any) {
-			parseError = `Corrupted data — file may be truncated or malformed: ${err.message}`;
+			const lines = parseBinaryBuffer(buffer, ext);
+			// Use replaceSession so the change is broadcast to any child window via the bridge
+			// and legacy dataStore + time index are kept in sync.
+			replaceSession(lines);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			parseError = `Corrupted data — file may be truncated or malformed: ${message}`;
 		}
 	}
 </script>

@@ -52,6 +52,11 @@
 	let selectedField: NumericField = $state(_seedField);
 	let isDarkTheme = $state(false);
 
+	// Child popup windows receive telemetry from the master via postMessage bridge.
+	const isChildWindow = typeof window !== 'undefined' && !!window.opener;
+	const isDataSyncing =
+		typeof document !== 'undefined' && document.documentElement.dataset.dataSync === 'in-progress';
+
 	const hasData = $derived(
 		$dataStore.telemetry.length > 0 &&
 			$dataStore.telemetry.some((line) => line.lat !== 0 && line.lon !== 0)
@@ -489,8 +494,11 @@
 			class="absolute inset-0 z-10 flex items-center justify-center rounded-xl border border-primary/15 bg-white/90 text-sm font-semibold text-primary-700 shadow-lg pointer-events-auto dark:bg-neutral-900/95 dark:text-primary-100"
 			style="z-index:10;"
 		>
-			No data loaded — use a <span class="mx-1 font-semibold text-primary">Load Data</span> pane to import
-			a file
+			{isDataSyncing
+				? 'Syncing data from main window…'
+				: isChildWindow
+					? 'No data loaded — waiting for sync from main window'
+					: 'No data loaded — use a Load Data pane to import a file'}
 		</div>
 	{/if}
 </div>

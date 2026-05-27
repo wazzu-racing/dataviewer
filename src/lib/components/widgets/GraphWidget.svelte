@@ -289,6 +289,12 @@
 	// Margin zoom highlight state and axis margin pointer handlers
 	let zoomMarginHover: 'left' | 'right' | 'bottom' | null = $state(null);
 
+	// In a child popup window, data arrives via bridge from the master window.
+	// The "use a Load Data pane" instruction does not apply here.
+	const isChildWindow = typeof window !== 'undefined' && !!window.opener;
+	const isDataSyncing =
+		typeof document !== 'undefined' && document.documentElement.dataset.dataSync === 'in-progress';
+
 	function onPointerMoveMarginZoom(e: PointerEvent) {
 		if (!e.shiftKey || !container) {
 			zoomMarginHover = null;
@@ -1393,7 +1399,11 @@
 			<div
 				class="flex h-full items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
 			>
-				No data loaded — use a Load Data pane to import a file
+				{isDataSyncing
+					? 'Syncing data from main window…'
+					: isChildWindow
+						? 'No data loaded — waiting for sync from main window'
+						: 'No data loaded — use a Load Data pane to import a file'}
 			</div>
 		{/if}
 
