@@ -33,6 +33,7 @@
 	import { deserializeLayout, generateShareUrl } from '$lib/shareUtils';
 	import { parseBinaryBuffer } from '$lib/dataParser';
 	import { saveWazzuFile, convertBinToWazzu, downloadBlob } from '$lib/fileFormat';
+	import Papa from 'papaparse';
 	import { data as globalData } from '$lib/data.svelte';
 	import { consumeLiveSerialBytes } from '$lib/liveConnection';
 	import { appendLiveTelemetry, replaceSession, startLiveSession } from '$lib/liveSession';
@@ -168,6 +169,18 @@
 		const metadata = $state.snapshot(globalData.metadata);
 		const blob = await saveWazzuFile(globalData.lines, metadata);
 		downloadBlob(blob, `${metadata.name.replace(/\s+/g, '_')}.wazzuracing`);
+	}
+
+	function handleExportCsv() {
+		if (globalData.lines.length === 0) {
+			alert('No data to export.');
+			return;
+		}
+
+		const csv = Papa.unparse(globalData.lines);
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+		const filename = `${globalData.metadata.name.replace(/\s+/g, '_')}.csv`;
+		downloadBlob(blob, filename);
 	}
 
 	async function handleConvertBin() {
@@ -1188,6 +1201,12 @@
 			label: 'Convert .bin to .wazzuracing',
 			description: 'Select a .bin file and convert it to the new format',
 			action: handleConvertBin
+		},
+		{
+			id: 'export-csv',
+			label: 'Download CSV',
+			description: 'Download current telemetry as a CSV file',
+			action: handleExportCsv
 		}
 	];
 

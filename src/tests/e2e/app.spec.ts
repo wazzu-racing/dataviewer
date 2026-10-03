@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
+const SAMPLE_BIN_PATH = fileURLToPath(new URL('./fixtures/sample.bin', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // App smoke tests
@@ -87,11 +90,55 @@ test.describe('Load Data widget', () => {
 			return;
 		}
 
-		const fixturePath = path.resolve(__dirname, 'fixtures/sample.bin');
-		await fileInput.setInputFiles(fixturePath);
+		await fileInput.setInputFiles(SAMPLE_BIN_PATH);
 
 		// Should show a "X data points loaded" message
 		await expect(page.getByText(/data points loaded/)).toBeVisible({ timeout: 5000 });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CSV export
+// ---------------------------------------------------------------------------
+test.describe('CSV export', () => {
+	test('downloads the loaded telemetry with headers and data rows', async ({ page }) => {
+		await page.goto('/');
+		await expect(page.locator('body')).toHaveClass(/modal-open/);
+		const loadDialog = page.getByRole('dialog', { name: 'Load Data' });
+		await loadDialog.locator('input[type="file"]').setInputFiles(SAMPLE_BIN_PATH);
+		await expect(loadDialog.getByText('2 data points loaded')).toBeVisible();
+		await loadDialog.getByRole('button', { name: 'Done' }).click();
+
+		await page.getByRole('button', { name: 'Command Palette' }).click();
+		const commandDialog = page.getByRole('dialog', { name: 'Command palette' });
+		await commandDialog.getByRole('textbox').fill('Download CSV');
+		const downloadPromise = page.waitForEvent('download');
+		await commandDialog.getByText('Download CSV', { exact: true }).click();
+		const download = await downloadPromise;
+
+		expect(download.suggestedFilename()).toBe('New_Session.csv');
+		const csv = await readFile(await download.path(), 'utf8');
+		const rows = csv.trimEnd().split(/\r?\n/);
+		const headers = rows[0].split(',');
+		const firstRow = rows[1].split(',');
+		expect(rows).toHaveLength(3);
+		expect(firstRow[headers.indexOf('write_millis')]).toBe('1000');
+		expect(firstRow[headers.indexOf('rpm')]).toBe('3000');
+	});
+
+	test('shows an error when no telemetry is loaded', async ({ page }) => {
+		await page.goto('/');
+		await expect(page.locator('body')).toHaveClass(/modal-open/);
+		await page.keyboard.press('Control+Shift+P');
+		const commandDialog = page.getByRole('dialog', { name: 'Command palette' });
+		await commandDialog.getByRole('textbox').fill('Download CSV');
+		let alertMessage = '';
+		page.once('dialog', async (dialog) => {
+			alertMessage = dialog.message();
+			await dialog.accept();
+		});
+		await commandDialog.getByText('Download CSV', { exact: true }).click();
+		expect(alertMessage).toBe('No data to export.');
 	});
 });
 
