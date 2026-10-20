@@ -45,6 +45,7 @@
 		type MasterBridge
 	} from '$lib/windowBridge';
 	import { setMasterBridge, getMasterBridge } from '$lib/windowBridgeRegistry';
+	import { replaceState } from '$app/navigation';
 	import type { Command, DataLine, SessionMetadata } from '$lib/types';
 	import { onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -1207,8 +1208,24 @@
 			label: 'Download CSV',
 			description: 'Download current telemetry as a CSV file',
 			action: handleExportCsv
+		},
+		{
+			id: 'new-session',
+			label: 'New Session',
+			description: 'Start a new session',
+			action: handleNewSession
 		}
 	];
+
+	function handleNewSession(): void {
+		if (!browser) return;
+		// clear url then update to fresh state
+		const url = new URL(window.location.href);
+		url.search = '';
+		url.hash = '';
+		replaceState(url, {});
+		showLoadDataModal = true;
+	}
 
 	const childStaticCommands: Command[] = [
 		{
