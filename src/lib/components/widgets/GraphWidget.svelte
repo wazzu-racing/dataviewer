@@ -268,7 +268,7 @@
 	// snapshot it for $state initialization. untrack() prevents Svelte from
 	// treating the prop reads as reactive dependencies (seed-once pattern).
 	const { config: _cfg, onConfigChange }: Props = $props();
-	const _seedX: NumericField = untrack(() => (_cfg?.xField as NumericField) ?? 'time');
+	const _seedX: NumericField = untrack(() => (_cfg?.xField as NumericField) ?? 'write_millis');
 	const _seedY: NumericField[] = untrack(() =>
 		(_cfg?.yFields as NumericField[] | undefined)?.length
 			? (_cfg!.yFields as NumericField[])
