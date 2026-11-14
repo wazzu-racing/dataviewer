@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { data as globalData } from '$lib/data.svelte';
 	import { parseBinaryBuffer } from '$lib/dataParser';
-	import { loadWazzuFile } from '$lib/fileFormat';
+	import { loadWazzuFile, parseCsvBuffer } from '$lib/fileFormat';
 	import { replaceSession } from '$lib/liveSession';
 
 	// onDismiss is part of the component props contract (forwarded/used by parent modal)
@@ -24,6 +24,13 @@
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
 				parseError = `Error parsing .wazzuracing file: ${message}`;
+			}
+		} else if (f.name.endsWith('.csv')) {
+			try {
+				replaceSession(parseCsvBuffer(buffer));
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				parseError = `Error parsing .csv file: ${message}`;
 			}
 		} else {
 			const ext = f.name.endsWith('.wr') ? 'wr' : 'bin';
@@ -56,7 +63,7 @@
 		type="file"
 		bind:files
 		onchange={handleLoadFile}
-		accept=".bin,.wr,.wazzuracing"
+		accept=".bin,.wr,.wazzuracing,.csv"
 		class="text-sm text-zinc-700 dark:text-neutral-300 file:mr-3 file:cursor-pointer file:rounded-md file:border-2 file:border-primary file:bg-background dark:file:bg-neutral-800 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-primary dark:file:text-neutral-100 transition-all duration-150 hover:file:bg-primary hover:file:text-white focus:file:ring-2 focus:file:ring-primary/70 focus:file:outline-none"
 	/>
 

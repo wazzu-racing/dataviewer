@@ -1,7 +1,8 @@
 import { strToU8, unzipSync, zipSync, strFromU8 } from 'fflate';
 import Papa from 'papaparse';
-import type { DataLine, SessionMetadata } from './types';
+import { type DataLine, type SessionMetadata, NUMERIC_FIELDS } from './types';
 import { parseDataLine } from './dataParser';
+import { isNumericField } from './fieldMetadata';
 
 /**
  * Loads a .wazzuracing file from an ArrayBuffer.
@@ -70,6 +71,42 @@ export async function loadWazzuFile(buffer: ArrayBuffer): Promise<{
 	})) as DataLine[];
 
 	return { telemetry, metadata };
+}
+
+/**
+ * converts csv `unixtime` cell to Date
+ * missing/unparseable become unix epoch
+ */
+function parseCsvUnixtime(value: unknown): Date {
+	// logger should record seconds so convert to milliseconds unless clearly very large num
+	const input = typeof value === 'number' && Math.abs(value) < 1e11 ? value * 1000 : value;
+	const date = new Date(input as string | number | Date);
+	return Number.isNaN(date.getTime()) ? new Date(0) : date;
+}
+
+/**
+ * parses arbitrary csv into DataLine[].
+ */
+export function parseCsvBuffer(buffer: ArrayBuffer): DataLine[] {
+	const parsed = Papa.parse<Record<string, unknown>>(strFromU8(new Uint8Array(buffer)), {
+		header: true,
+		dynamicTyping: true,
+		skipEmptyLines: 'greedy',
+		transformHeader: (header) => header.trim()
+	});
+	// need to check unixtime separately since its not in NUMERIC_FIELDS
+	const isRecognized = (column: string) => column === 'unixtime' || isNumericField(column);
+	if (parsed.data.length === 0 || !parsed.meta.fields?.some(isRecognized)) {
+		throw new Error('CSV file contains no data cols that could be recognized');
+	}
+	return parsed.data.map((row) => {
+		const line = { unixtime: parseCsvUnixtime(row.unixtime) } as DataLine;
+		for (const field of NUMERIC_FIELDS) {
+			const value = row[field];
+			line[field] = typeof value === 'number' ? value : 0;
+		}
+		return line;
+	});
 }
 
 /**

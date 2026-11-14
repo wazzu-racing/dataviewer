@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { loadWazzuFile, saveWazzuFile, convertBinToWazzu } from '../../lib/fileFormat';
-import type { DataLine, SessionMetadata } from '../../lib/types';
+import Papa from 'papaparse';
+import {
+	loadWazzuFile,
+	saveWazzuFile,
+	convertBinToWazzu,
+	parseCsvBuffer
+} from '../../lib/fileFormat';
+import { NUMERIC_FIELDS, type DataLine, type SessionMetadata } from '../../lib/types';
 
 describe('fileFormat', () => {
 	/** @vitest-environment node */
@@ -103,5 +109,73 @@ describe('fileFormat', () => {
 		expect(metadata.name).toBe('Converted Session');
 		expect(metadata.driver).toBe('Driver');
 		expect(telemetry.length).toBe(1);
+	});
+
+	describe('parseCsvBuffer', () => {
+		const toBuffer = (csv: string) => new TextEncoder().encode(csv).buffer as ArrayBuffer;
+		const noColumnsError = /no data cols that could be recognized/;
+
+		it('imports every supported column', () => {
+			const header = ['unixtime', ...NUMERIC_FIELDS].join(',');
+			const row = ['1700000000', ...NUMERIC_FIELDS.map((_, i) => String(i + 1))].join(',');
+
+			const [line] = parseCsvBuffer(toBuffer(`${header}\n${row}\n`));
+
+			expect(line.unixtime.getTime()).toBe(1_700_000_000_000);
+			NUMERIC_FIELDS.forEach((field, i) => expect(line[field]).toBe(i + 1));
+		});
+
+		it('drops unknown columns and sets missing fields to zero', () => {
+			const telemetry = parseCsvBuffer(toBuffer('rpm,foo,tps\n5000,hello,12.5\n6000,world,50\n'));
+
+			expect(telemetry).toHaveLength(2);
+			expect([telemetry[0].rpm, telemetry[0].tps]).toEqual([5000, 12.5]);
+			expect([telemetry[1].rpm, telemetry[1].tps]).toEqual([6000, 50]);
+			expect('foo' in telemetry[0]).toBe(false);
+			expect(telemetry[0].write_millis).toBe(0);
+			expect(telemetry[0].unixtime.getTime()).toBe(0);
+			for (const field of NUMERIC_FIELDS) {
+				expect(typeof telemetry[0][field]).toBe('number');
+			}
+		});
+
+		it('sets blank and non-numeric cells to zero', () => {
+			const [line] = parseCsvBuffer(toBuffer('rpm,tps,afr\n1,abc,\n'));
+
+			expect([line.rpm, line.tps, line.afr]).toEqual([1, 0, 0]);
+		});
+
+		it('trims header whitespace and skips blank rows', () => {
+			const telemetry = parseCsvBuffer(toBuffer(' rpm , tps\r\n1,2\r\n,\r\n\r\n'));
+
+			expect(telemetry).toHaveLength(1);
+			expect([telemetry[0].rpm, telemetry[0].tps]).toEqual([1, 2]);
+		});
+
+		it.each([
+			['epoch seconds', '1700000000'],
+			['epoch milliseconds', '1700000000000'],
+			['an ISO string', '2023-11-14T22:13:20.000Z']
+		])('parses unixtime given as %s', (_format, cell) => {
+			const [line] = parseCsvBuffer(toBuffer(`rpm,unixtime\n1,${cell}\n`));
+
+			expect(line.unixtime.getTime()).toBe(1_700_000_000_000);
+		});
+
+		it('falls back to the epoch for an unparseable unixtime', () => {
+			const [line] = parseCsvBuffer(toBuffer('rpm,unixtime\n1,not-a-date\n'));
+
+			expect(line.unixtime.getTime()).toBe(0);
+		});
+
+		it('reads back the CSV that Download CSV exports', () => {
+			expect(parseCsvBuffer(toBuffer(Papa.unparse(mockTelemetry)))).toEqual(mockTelemetry);
+		});
+
+		it('throws when no column is recognized or there are no data rows', () => {
+			expect(() => parseCsvBuffer(toBuffer('foo,bar\n1,2\n'))).toThrow(noColumnsError);
+			expect(() => parseCsvBuffer(toBuffer('rpm,tps\n'))).toThrow(noColumnsError);
+			expect(() => parseCsvBuffer(toBuffer(''))).toThrow(noColumnsError);
+		});
 	});
 });
